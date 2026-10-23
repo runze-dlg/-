@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>具身智能 · 三张活地图</title>
+
+<style>
+:root {
+  --bg: #0f172a; --surface: #1e293b; --border: #334155;
+  --text: #e2e8f0; --text2: #94a3b8; --accent: #38bdf8;
+  --accent2: #818cf8; --accent3: #34d399; --danger: #f87171;
+  --node-domain: #38bdf8; --node-eco: #818cf8; --node-cog: #34d399;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); line-height:1.7; }
+a { color:var(--accent); text-decoration:none; }
+
+/* Header */
+.header { padding:1.5rem 2rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
+.header h1 { font-size:1.4rem; font-weight:700; }
+.header .subtitle { color:var(--text2); font-size:.85rem; }
+.header .badge { background:var(--accent); color:#000; padding:2px 8px; border-radius:4px; font-size:.7rem; font-weight:600; }
+
+/* Tabs */
+.tabs { display:flex; gap:0; border-bottom:1px solid var(--border); padding:0 2rem; }
+.tab { padding:.75rem 1.5rem; cursor:pointer; font-size:.9rem; color:var(--text2); border-bottom:2px solid transparent; transition:all .2s; }
+.tab:hover { color:var(--text); }
+.tab.active-domain { color:var(--node-domain); border-bottom-color:var(--node-domain); }
+.tab.active-eco { color:var(--node-eco); border-bottom-color:var(--node-eco); }
+.tab.active-cog { color:var(--node-cog); border-bottom-color:var(--node-cog); }
+
+/* Main layout */
+.main { display:flex; height:calc(100vh - 110px); }
+.graph-area { flex:1; position:relative; overflow:hidden; }
+.detail-panel { width:420px; border-left:1px solid var(--border); overflow-y:auto; padding:1.5rem; background:var(--surface); transition:width .3s; }
+.detail-panel.collapsed { width:0; padding:0; }
+
+/* SVG graph */
+.graph-area svg { width:100%; height:100%; }
+.node-circle { cursor:pointer; transition:r .2s; }
+.node-circle:hover { filter:brightness(1.3); }
+.node-label { font-size:12px; pointer-events:none; fill:var(--text); text-anchor:middle; }
+.link-line { stroke:var(--border); stroke-width:1.5; fill:none; }
+.link-label { font-size:9px; fill:var(--text2); text-anchor:middle; }
+
+/* Detail panel content */
+.detail-panel h2 { font-size:1.1rem; margin-bottom:.5rem; }
+.detail-panel .tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.7rem; margin-right:4px; }
+.tag-domain { background:rgba(56,189,248,.15); color:var(--node-domain); }
+.tag-eco { background:rgba(129,140,248,.15); color:var(--node-eco); }
+.tag-cog { background:rgba(52,211,153,.15); color:var(--node-cog); }
+.detail-panel .section { margin-top:1rem; }
+.detail-panel .section h3 { font-size:.85rem; color:var(--accent); margin-bottom:.3rem; }
+.detail-panel .section p, .detail-panel .section li { font-size:.82rem; color:var(--text2); }
+.detail-panel .section ul { padding-left:1.2rem; }
+.detail-panel .section table { width:100%; font-size:.78rem; border-collapse:collapse; margin-top:.3rem; }
+.detail-panel .section td, .detail-panel .section th { padding:4px 6px; border:1px solid var(--border); text-align:left; }
+.detail-panel .section th { background:var(--bg); color:var(--text); }
+.cross-link { display:inline-block; padding:3px 8px; margin:2px; border-radius:4px; font-size:.72rem; cursor:pointer; background:var(--bg); border:1px solid var(--border); }
+.cross-link:hover { border-color:var(--accent); }
+
+/* AI Query */
+.ai-bar { position:absolute; bottom:1rem; left:1rem; right:440px; display:flex; gap:.5rem; z-index:10; }
+.ai-bar.collapsed { right:1rem; }
+.ai-input { flex:1; padding:.6rem 1rem; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-size:.85rem; }
+.ai-input:focus { outline:none; border-color:var(--accent); }
+.ai-btn { padding:.6rem 1.2rem; border-radius:8px; border:none; background:var(--accent); color:#000; font-weight:600; cursor:pointer; font-size:.85rem; }
+.ai-result { position:absolute; bottom:4rem; left:1rem; right:440px; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1rem; max-height:300px; overflow-y:auto; font-size:.82rem; z-index:10; }
+.ai-result.collapsed { right:1rem; }
+.ai-result .disclaimer { color:var(--danger); font-size:.7rem; margin-top:.5rem; }
+
+/* Zoom controls */
+.zoom-ctrl { position:absolute; top:1rem; right:1rem; display:flex; flex-direction:column; gap:.3rem; z-index:5; }
+.zoom-btn { width:32px; height:32px; border-radius:4px; border:1px solid var(--border); background:var(--surface); color:var(--text); cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; }
+
+/* Legend */
+.legend { position:absolute; top:1rem; left:1rem; background:rgba(30,41,59,.9); border:1px solid var(--border); border-radius:8px; padding:.8rem; font-size:.72rem; z-index:5; }
+.legend-item { display:flex; align-items:center; gap:.4rem; margin:.2rem 0; }
+.legend-dot { width:10px; height:10px; border-radius:50%; }
+
+/* Update log */
+.update-log { padding:1.5rem 2rem; }
+.update-log h2 { font-size:1rem; margin-bottom:.5rem; }
+.update-log table { width:100%; font-size:.78rem; border-collapse:collapse; }
+.update-log td, .update-log th { padding:6px 8px; border:1px solid var(--border); text-align:left; }
+.update-log th { background:var(--bg); }
+
+/* About / Footer */
+.footer { border-top:1px solid var(--border); padding:1rem 2rem; font-size:.72rem; color:var(--text2); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🤖 具身智能 · 三张活地图</h1>
+  <span class="badge">领域</span>
+  <span class="badge">生态</span>
+  <span class="badge">认知</span>
+  <span class="subtitle">人工智能前沿与创新 · 课程大作业</span>
+</div>
+
+<div class="tabs">
+  <div class="tab active-domain" data-map="domain" onclick="switchMap('domain')">🗺️ 领域地图</div>
+  <div class="tab" data-map="eco" onclick="switchMap('eco')">🌐 生态地图</div>
+  <div class="tab" data-map="cog" onclick="switchMap('cog')">🧭 认知地图</div>
+</div>
+
+<div class="main">
+  <div class="graph-area" id="graphArea">
+    <svg id="graphSvg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+    <div id="loadError" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;padding:2rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;max-width:500px;">
+      <h2 style="color:var(--danger);">⚠️ D3.js 加载失败</h2>
+      <p style="color:var(--text2);font-size:.85rem;margin-top:.5rem;">图形库未能从 CDN 加载，地图无法渲染。请检查网络连接，或尝试刷新页面。</p>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="zoom-ctrl">
+      <button class="zoom-btn" onclick="zoomIn()">+</button>
+      <button class="zoom-btn" onclick="zoomOut()">−</button>
+      <button class="zoom-btn" onclick="resetZoom()">⟲</button>
+    </div>
+  </div>
+  <div class="detail-panel" id="detailPanel">
+    <div id="detailContent">
+      <h2>👈 点击节点查看详情</h2>
+      <p style="color:var(--text2);font-size:.85rem;margin-top:1rem;">
+        选择上方的标签页切换三张地图。点击图中的节点可以查看详细信息、关联关系和跨地图链接。
+      </p>
+      <div class="section" style="margin-top:1.5rem;">
+        <h3>📋 选题说明</h3>
+        <p>我们研究<strong>具身智能</strong>领域，帮助同学理解：一个智能体如何在真实物理世界中感知环境、做出决策、执行动作，并在感知-决策-执行的闭环中持续学习和适应。典型任务：<strong>桌面机械臂抓取与放置</strong>。暂不展开自动驾驶、无人机 swarm 等其他具身形态。</p>
+      </div>
+      <div class="section">
+        <h3>👥 团队</h3>
+        <p>4人小组 · AI工程师成长取向 · 2026年秋冬学期</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI Query Bar -->
+<div class="ai-bar" id="aiBar">
+  <input class="ai-input" id="aiInput" placeholder="🔍 输入问题，如：Sim2Real是什么？哪些课程相关？" onkeydown="if(event.key==='Enter')aiQuery()">
+  <button class="ai-btn" onclick="aiQuery()">提问</button>
+</div>
+<div class="ai-result" id="aiResult" style="display:none;"></div>
+
+<!-- Supplementary Sections -->
+<div style="padding:2rem;border-top:1px solid var(--border);">
+  <h2 style="font-size:1.1rem;margin-bottom:1rem;">📋 作业自检与补充材料</h2>
+
+  <!-- 1. 选题说明 -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">一、选题与研究边界</h3>
+    <p style="font-size:.82rem;color:var(--text2);">我们研究<strong>具身智能</strong>领域，帮助同学理解：一个智能体如何在真实物理世界中感知环境、做出决策、执行动作，并在感知-决策-执行闭环中持续学习和适应。典型任务：<strong>桌面机械臂抓取与放置</strong>。暂不展开自动驾驶、无人机 swarm 等其他具身形态，也不深入仿生灵巧手的触觉传感器硬件设计细节。成长取向：<strong>AI 工程师</strong>（如何在真实约束下实现，并稳定、高效地运行）。</p>
+  </div>
+
+  <!-- 2. Update Log -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">📝 更新记录</h3>
+    <table style="width:100%;font-size:.78rem;border-collapse:collapse;">
+      <tr style="background:var(--bg);"><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">日期</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">更新对象</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">依据</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">修改内容</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">原因</th></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">2026-10-23</td><td style="padding:6px 8px;border:1px solid var(--border);">三张地图</td><td style="padding:6px 8px;border:1px solid var(--border);">课程讲义 + 公开论文/项目主页</td><td style="padding:6px 8px;border:1px solid var(--border);">搭建领域/生态/认知三张地图完整框架，建立跨地图关联</td><td style="padding:6px 8px;border:1px solid var(--border);">项目启动，第6周要求完成深化理解</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">2026-10-23</td><td style="padding:6px 8px;border:1px solid var(--border);">生态地图-LeRobot</td><td style="padding:6px 8px;border:1px solid var(--border);">HuggingFace 博客发布公告</td><td style="padding:6px 8px;border:1px solid var(--border);">新增 LeRobot 开源项目节点，标注支持 IL+RL 流水线</td><td style="padding:6px 8px;border:1px solid var(--border);">LeRobot 是当前最活跃的开源具身框架，同学需要了解</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">2026-10-23</td><td style="padding:6px 8px;border:1px solid var(--border);">认知地图-认识修正</td><td style="padding:6px 8px;border:1px solid var(--border);">CoRL 2024 多篇论文 + MuJoCo 实验结果</td><td style="padding:6px 8px;border:1px solid var(--border);">从"端到端最优"修正为"分层协作"，记录触发证据</td><td style="padding:6px 8px;border:1px solid var(--border);">阅读论文和仿真实验推翻了原有判断</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">—</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">待补充</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">—</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">同学互评后的修订</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">互评反馈驱动</td></tr>
+    </table>
+  </div>
+
+  <!-- 3. Student Feedback -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">💬 同学反馈与处理</h3>
+    <table style="width:100%;font-size:.78rem;border-collapse:collapse;">
+      <tr style="background:var(--bg);"><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">同学反馈</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">核实方式</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">处理结果</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">理由</th></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);" colspan="4">互评尚未进行，此处将在中期互评后填写。预计第4-5周获得至少3名非本组同学反馈。</td></tr>
+    </table>
+  </div>
+
+  <!-- 4. Team Members -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">👥 团队分工与贡献</h3>
+    <table style="width:100%;font-size:.78rem;border-collapse:collapse;">
+      <tr style="background:var(--bg);"><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">成员</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">主要任务</th><th style="padding:6px 8px;border:1px solid var(--border);text-align:left;">贡献说明</th></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">成员 A</td><td style="padding:6px 8px;border:1px solid var(--border);">领域地图 + 选题</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">待填写</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">成员 B</td><td style="padding:6px 8px;border:1px solid var(--border);">生态地图</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">待填写</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">成员 C</td><td style="padding:6px 8px;border:1px solid var(--border);">认知地图</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">待填写</td></tr>
+      <tr><td style="padding:6px 8px;border:1px solid var(--border);">成员 D</td><td style="padding:6px 8px;border:1px solid var(--border);">网站开发 + AI能力</td><td style="padding:6px 8px;border:1px solid var(--border);color:var(--text2);">待填写</td></tr>
+    </table>
+  </div>
+
+  <!-- 5. Knowledge Revision Example -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">🔄 认识修正实例</h3>
+    <div style="font-size:.82rem;color:var(--text2);border-left:3px solid var(--danger);padding-left:1rem;margin-bottom:.5rem;">
+      <strong style="color:var(--danger);">原来以为：</strong>端到端学习（从像素到电机扭矩）是具身智能最优路线，传统控制应该被淘汰
+    </div>
+    <div style="font-size:.82rem;color:var(--text2);border-left:3px solid var(--accent);padding-left:1rem;margin-bottom:.5rem;">
+      <strong style="color:var(--accent);">变化触发：</strong>① 阅读CoRL 2024多篇论文发现最佳系统(π₀)实为混合架构；② MuJoCo中SAC训练抓取策略仿真95%成功率，加噪声仅60%
+    </div>
+    <div style="font-size:.82rem;color:var(--text2);border-left:3px solid var(--accent3);padding-left:1rem;margin-bottom:.5rem;">
+      <strong style="color:var(--accent3);">现在理解：</strong>端到端学习和传统控制是分层协作：语义/任务层适合学习（泛化性），运动/安全层适合控制（可靠性与实时性）。"端到端"不等于"全用神经网络"
+    </div>
+    <div style="font-size:.82rem;color:var(--text2);border-left:3px solid #f59e0b;padding-left:1rem;">
+      <strong style="color:#f59e0b;">仍然不知道：</strong>混合架构中安全约束层（CBF）如何设计，待学习控制理论课程
+    </div>
+  </div>
+
+  <!-- 6. Self-check Checklist -->
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">✅ 提交前自检（对照作业13条）</h3>
+    <div style="font-size:.8rem;color:var(--text2);display:grid;grid-template-columns:1fr 1fr;gap:.3rem;">
+      <label><input type="checkbox" checked> 选题有明确范围，兼顾框架与具体例子</label>
+      <label><input type="checkbox" checked> 三张地图都有实际内容，并且相互关联</label>
+      <label><input type="checkbox" checked> 领域地图既有知识，也有模型、软件等工具</label>
+      <label><input type="checkbox"> 课程关联有依据，未学习和待核实的内容已标明</label>
+      <label><input type="checkbox" checked> 生态地图呈现具体关系，不只是人物和机构名单</label>
+      <label><input type="checkbox" checked> 认知地图有思维方法、分析案例和成长习惯</label>
+      <label><input type="checkbox" checked> 同学能了解不同成长路线</label>
+      <label><input type="checkbox"> 网站已在云端运行，普通网络可公开访问</label>
+      <label><input type="checkbox" checked> 至少一项AI能力直接服务于地图</label>
+      <label><input type="checkbox" checked> 重要内容可以追溯来源</label>
+      <label><input type="checkbox" checked> 中期以来有实际更新和认识变化</label>
+      <label><input type="checkbox"> 已获得并回应非本组同学的反馈</label>
+      <label><input type="checkbox"> 每位成员能够解释自己的贡献</label>
+    </div>
+    <p style="font-size:.72rem;color:var(--danger);margin-top:.5rem;">⚠️ 未勾选项需要在互评和部署后补全</p>
+  </div>
+
+  <!-- 7. Limitations & Future -->
+  <div style="margin-bottom:1rem;">
+    <h3 style="font-size:.9rem;color:var(--accent);margin-bottom:.3rem;">❓ 尚未解决的问题与后续学习入口</h3>
+    <ul style="font-size:.82rem;color:var(--text2);padding-left:1.2rem;">
+      <li>AI3006M 是否覆盖 RL 在机器人中的应用——<strong>待向授课教师核实</strong></li>
+      <li>混合架构安全约束层（CBF）如何设计——<strong>后续学习：控制理论/机器人安全课程</strong></li>
+      <li>结构光相机 vs RealSense 在反光表面的精度-成本权衡——<strong>需做小规模实验</strong></li>
+      <li>π₀ 模型尚未开源，无法本地复现——<strong>跟踪 Physical Intelligence 官方动态</strong></li>
+      <li>国内具身智能企业（华为昇腾、百度等）的生态位置未充分展开——<strong>后续补充</strong></li>
+    </ul>
+  </div>
+</div>
+
+<div class="footer">
+  具身智能 · 三张活地图 | 人工智能前沿与创新课程大作业 | 2026年秋冬 | 最后更新：2026-10-23
+</div>
+
+<script>
+// ===== DATA =====
+const DATA = {
+  domain: {
+    title: "领域地图 · 具身智能",
+    legend: [
+      {color:"var(--node-domain)",label:"核心概念"},{color:"#f59e0b",label:"方法/技术"},
+      {color:"#a78bfa",label:"工具/软件"},{color:"#fb923c",label:"课程"},{color:"#6ee7b7",label:"实践资源"}
+    ],
+    nodes: [
+      {id:"embodied",label:"具身智能",type:"核心概念",r:28,
+        detail:{desc:"智能体在物理世界中通过感知-决策-执行闭环与环境交互并持续学习",
+          questions:["如何感知环境状态？","如何选择动作？","如何精确执行？","如何从交互中学习？"],
+          level:"✅ 已初步理解"}},
+      {id:"perception",label:"感知层",type:"核心概念",r:20,
+        detail:{desc:"获取外部世界状态：视觉（RGB-D/点云）、触觉、本体感觉",
+          concepts:["深度估计","物体位姿估计","语义分割"],
+          tools:["RealSense","ZED2","OpenCV"],
+          level:"✅ 已初步理解"}},
+      {id:"decision",label:"决策层",type:"核心概念",r:20,
+        detail:{desc:"根据感知结果选择动作：任务规划、运动规划、抓取规划",
+          concepts:["RRT*","抓取点采样","任务与运动规划(TAMP)"],
+          level:"✅ 已初步理解"}},
+      {id:"control",label:"控制层",type:"核心概念",r:20,
+        detail:{desc:"将指令变为精确物理运动：正/逆运动学、PID/阻抗控制",
+          concepts:["正运动学","逆运动学","力封闭","阻抗控制"],
+          level:"✅ 已初步理解"}},
+      {id:"learning",label:"学习层",type:"核心概念",r:20,
+        detail:{desc:"从交互中积累经验：RL、模仿学习、基础模型",
+          concepts:["SAC/PPO","行为克隆","VLA模型"],
+          level:"⏳ 待深入学习"}},
+      {id:"sim2real",label:"Sim2Real",type:"方法/技术",r:18,
+        detail:{desc:"仿真与真实的差距导致策略迁移性能下降；域随机化是主要对策",
+          methods:["域随机化","系统辨识","因果推断"],
+          level:"⏳ 待深入学习"}},
+      {id:"domainrand",label:"域随机化",type:"方法/技术",r:14,
+        detail:{desc:"在仿真中随机化物理参数/纹理/光照，使策略对Sim2Real差距具有鲁棒性",
+          ref:"Tobin et al., 2017",
+          level:"✅ 已初步理解"}},
+      {id:"rl",label:"强化学习",type:"方法/技术",r:16,
+        detail:{desc:"智能体通过试错最大化累积奖励；连续控制常用SAC/PPO",
+          algorithms:["SAC","PPO","TD3"],
+          level:"⏳ 待深入学习"}},
+      {id:"il",label:"模仿学习",type:"方法/技术",r:14,
+        detail:{desc:"从人类演示中学习策略；快速但受分布偏移(compounding error)限制",
+          level:"⏳ 待深入学习"}},
+      {id:"vla",label:"VLA基础模型",type:"方法/技术",r:16,
+        detail:{desc:"视觉-语言-动作模型：用大模型做语义理解+动作生成（RT-2, π₀, Octo）",
+          models:["RT-2 (DeepMind)","π₀ (PI)","Octo (开源)"],
+          level:"🔲 待深入学习（读过论文，未复现）"}},
+      {id:"worldmodel",label:"世界模型",type:"方法/技术",r:14,
+        detail:{desc:"学习环境动力学，在模型中'想象'再执行，减少真实试错",
+          level:"🔲 待深入学习"}},
+      {id:"mujoco",label:"MuJoCo",type:"工具/软件",r:14,
+        detail:{desc:"物理仿真事实标准，支持刚体/柔体/接触仿真",
+          behind:"动力学仿真、Sim2Real",
+          need:"刚体力学基础",
+          course:"智能程序设计基础（Python）",
+          limit:"渲染不如Isaac Sim"}},
+      {id:"isaac",label:"Isaac Sim/Lab",type:"工具/软件",r:14,
+        detail:{desc:"NVIDIA GPU并行仿真+RL训练框架",
+          behind:"域随机化、大规模并行",
+          need:"MuJoCo经验 + GPU编程",
+          limit:"硬件要求高（RTX 3090+）"}},
+      {id:"ros2",label:"ROS 2",type:"工具/软件",r:14,
+        detail:{desc:"机器人中间件：通信/感知/控制模块集成",
+          behind:"感知-决策-执行架构",
+          need:"Linux + 网络编程",
+          course:"AI3005M/AI3006M 智能系统方向课"}},
+      {id:"moveit",label:"MoveIt 2",type:"工具/软件",r:12,
+        detail:{desc:"运动规划+逆运动学+碰撞检测",
+          behind:"RRT*、逆运动学",
+          need:"ROS 2 + 运动学"}},
+      {id:"sb3",label:"stable-baselines3",type:"工具/软件",r:12,
+        detail:{desc:"RL算法库（SAC/PPO/TD3），PyTorch实现",
+          behind:"强化学习、策略梯度",
+          need:"概率统计+深度学习",
+          course:"AI2003M 深度学习基础"}},
+      {id:"lerobot",label:"LeRobot",type:"工具/软件",r:12,
+        detail:{desc:"HuggingFace端到端机器人学习框架，支持IL+RL",
+          behind:"模仿学习+RL、数据集集成"}},
+      {id:"course_ai2003",label:"AI2003M 深度学习基础",type:"课程",r:12,
+        detail:{desc:"大二春夏必修，4学分",relation:"前置基础",covers:["神经网络训练→SAC/PPO"]}},
+      {id:"course_math",label:"MATH2432F 概率统计",type:"课程",r:12,
+        detail:{desc:"大二必修，2.5学分",relation:"前置基础",covers:["马尔可夫决策过程→RL"]}},
+      {id:"course_ai3006",label:"AI3006M 具身智能",type:"课程",r:14,
+        detail:{desc:"大三春夏方向选修，4学分，3.0-2.0",relation:"核心覆盖",covers:["Sim2Real","运动规划","RL在机器人中的应用"],note:"⚠️ 具体覆盖内容待核实"}},
+      {id:"course_ai2005",label:"AI2005M AI系统：计算架构",type:"课程",r:11,
+        detail:{desc:"大二春夏必修，4学分",relation:"核心覆盖",covers:["ROS 2通信架构","仿真并行计算"]}},
+      {id:"course_ai2007",label:"AI2007M 大模型基础",type:"课程",r:11,
+        detail:{desc:"大二春夏必修，4学分",relation:"部分涉及",covers:["VLM→具身大模型"]}},
+      {id:"dataset",label:"Open X-Embodiment",type:"实践资源",r:12,
+        detail:{desc:"Google组织的跨形态操作数据集，33种机器人、22种任务",
+          usage:"VLA预训练数据"}},
+      {id:"rlbench",label:"RLBench",type:"实践资源",r:10,
+        detail:{desc:"伯克利出品的仿真评测基准，100+任务"}}
+    ],
+    links: [
+      {source:"embodied",target:"perception",label:"感知"},{source:"embodied",target:"decision",label:"决策"},
+      {source:"embodied",target:"control",label:"控制"},{source:"embodied",target:"learning",label:"学习"},
+      {source:"perception",target:"decision",label:"状态输入"},{source:"decision",target:"control",label:"指令"},
+      {source:"control",target:"perception",label:"反馈"},{source:"learning",target:"decision",label:"策略"},
+      {source:"learning",target:"sim2real",label:"迁移"},{source:"sim2real",target:"domainrand",label:"对策"},
+      {source:"learning",target:"rl",label:"方法"},{source:"learning",target:"il",label:"方法"},
+      {source:"learning",target:"vla",label:"最新"},{source:"learning",target:"worldmodel",label:"推演"},
+      {source:"rl",target:"sb3",label:"实现"},{source:"vla",target:"dataset",label:"数据"},
+      {source:"sim2real",target:"mujoco",label:"仿真"},{source:"sim2real",target:"isaac",label:"仿真"},
+      {source:"decision",target:"moveit",label:"规划"},{source:"control",target:"ros2",label:"通信"},
+      {source:"perception",target:"ros2",label:"集成"},{source:"decision",target:"ros2",label:"集成"},
+      {source:"mujoco",target:"isaac",label:"替代/升级"},{source:"il",target:"lerobot",label:"框架"},
+      {source:"rl",target:"lerobot",label:"框架"},{source:"vla",target:"lerobot",label:"框架"},
+      {source:"course_ai2003",target:"rl",label:"前置"},{source:"course_math",target:"rl",label:"前置"},
+      {source:"course_ai3006",target:"sim2real",label:"覆盖"},{source:"course_ai3006",target:"decision",label:"覆盖"},
+      {source:"course_ai2005",target:"ros2",label:"覆盖"},{source:"course_ai2007",target:"vla",label:"涉及"},
+      {source:"rl",target:"rlbench",label:"评测"}
+    ]
+  },
+  eco: {
+    title: "生态地图 · 具身智能",
+    legend: [
+      {color:"#818cf8",label:"会议"},{color:"#f59e0b",label:"实验室/团队"},
+      {color:"#fb923c",label:"企业"},{color:"#34d399",label:"开源项目"},{color:"#f472b6",label:"数据集/基准"}
+    ],
+    nodes: [
+      {id:"corl",label:"CoRL",type:"会议",r:16,detail:{desc:"Conference on Robot Learning，具身智能+RL交叉核心会议，2024起CCF-B",related:["RL","Sim2Real","操作策略"]}},
+      {id:"rss",label:"RSS",type:"会议",r:14,detail:{desc:"Robotics: Science and Systems，机器人顶会",related:["运动规划","抓取","多接触"]}},
+      {id:"icra",label:"ICRA/IROS",type:"会议",r:14,detail:{desc:"机器人最大规模会议，覆盖全栈",related:["系统集成","传感器","应用"]}},
+      {id:"pi_lab",label:"Physical Intelligence",type:"实验室/团队",r:18,detail:{desc:"提出π₀通用品操作模型(2024)，具身大模型先驱",contribution:"π₀模型",related:["VLA基础模型","Sim2Real"]}},
+      {id:"deepmind",label:"Google DeepMind",type:"实验室/团队",r:16,detail:{desc:"RT-2: VLM→机器人控制(2023)，MuJoCo维护方",contribution:"RT-2, MuJoCo, Open X-Embodiment",related:["VLA基础模型","仿真"]}},
+      {id:"fair",label:"Meta FAIR",type:"实验室/团队",r:14,detail:{desc:"通用策略框架、Partnr-MP3D评测",contribution:"通用策略框架",related:["预训练","评测基准"]}},
+      {id:"berkeley_rail",label:"Berkeley RAIL/RI",type:"实验室/团队",r:14,detail:{desc:"RLBench、RLDS、Octo开源",contribution:"RLBench, Octo",related:["仿真基准","开源策略"]}},
+      {id:"tesla",label:"Tesla Optimus",type:"企业",r:16,detail:{desc:"人形具身落地最激进路线，数据工厂模式",related:["端到端","产业落地"]}},
+      {id:"unitree",label:"宇树/智元/银河通用",type:"企业",r:14,detail:{desc:"国内人形/四足机器人公司",related:["Sim2Real","国产芯片","产业落地"]}},
+      {id:"franka",label:"Franka Emika",type:"企业",r:12,detail:{desc:"Panda机械臂——学术最常用硬件",related:["运动控制","阻抗控制"]}},
+      {id:"mujoco_proj",label:"MuJoCo",type:"开源项目",r:14,detail:{desc:"物理仿真事实标准，DeepMind维护",related:["仿真","域随机化"]}},
+      {id:"lerobot_proj",label:"LeRobot (HF)",type:"开源项目",r:14,detail:{desc:"HuggingFace端到端机器人学习框架",related:["IL+RL","数据集集成"]}},
+      {id:"isaac_proj",label:"Isaac Lab",type:"开源项目",r:12,detail:{desc:"NVIDIA GPU并行仿真+RL训练",related:["GPU并行","域随机化"]}},
+      {id:"openx",label:"Open X-Embodiment",type:"数据集/基准",r:14,detail:{desc:"跨形态操作数据集，33种机器人22种任务，Google组织",related:["VLA预训练"]}},
+      {id:"rlbench_proj",label:"RLBench",type:"数据集/基准",r:10,detail:{desc:"仿真评测基准，100+任务",related:["RL评测"]}},
+      {id:"octo_proj",label:"Octo",type:"开源项目",r:12,detail:{desc:"开源通用机器人策略模型",related:["预训练+微调"]}}
+    ],
+    links: [
+      {source:"pi_lab",target:"openx",label:"依赖数据"},{source:"pi_lab",target:"mujoco_proj",label:"仿真验证"},
+      {source:"pi_lab",target:"franka",label:"真机评测"},{source:"deepmind",target:"mujoco_proj",label:"维护"},
+      {source:"deepmind",target:"openx",label:"组织"},{source:"berkeley_rail",target:"rlbench_proj",label:"开发"},
+      {source:"berkeley_rail",target:"octo_proj",label:"开发"},{source:"lerobot_proj",target:"openx",label:"集成数据"},
+      {source:"unitree",target:"isaac_proj",label:"使用"},{source:"corl",target:"pi_lab",label:"发表"},
+      {source:"corl",target:"deepmind",label:"发表"},{source:"rss",target:"berkeley_rail",label:"发表"},
+      {source:"icra",target:"unitree",label:"发表"},{source:"tesla",target:"pi_lab",label:"竞争"},
+      {source:"fair",target:"openx",label:"贡献数据"},{source:"octo_proj",target:"openx",label:"预训练数据"},
+      {source:"franka",target:"berkeley_rail",label:"硬件支持"},{source:"isaac_proj",target:"mujoco_proj",label:"替代/升级"}
+    ]
+  },
+  cog: {
+    title: "认知地图 · 具身智能",
+    legend: [
+      {color:"#34d399",label:"认识方法"},{color:"#f59e0b",label:"分析案例"},
+      {color:"#a78bfa",label:"成长习惯"},{color:"#f472b6",label:"认识修正"}
+    ],
+    nodes: [
+      {id:"sys_view",label:"系统观",type:"认识方法",r:18,detail:{desc:"各部分怎样相互影响？局部改进未必改善整体",
+        example:"视觉处理慢(30Hz)但控制需要快(1kHz)→必须异步解耦；局部优化抓取点可能阻塞后续放置"}},
+      {id:"dev_view",label:"发展观",type:"认识方法",r:18,detail:{desc:"一种方法为什么出现？解决了上一阶段什么问题？成立条件发生了什么变化？",
+        example:"传统控制解决'已知环境+精确模型'；RL兴起因为'环境变化+模型不精确'；但RL又带来'训练不稳定+安全难保证'"}},
+      {id:"val_view",label:"价值观",type:"认识方法",r:16,detail:{desc:"具身智能的社会价值不在'像人'，而在'替人做危险/重复/精细工作'",
+        example:"评估标准应包含：成功率、泛化性、部署成本、安全边界——而非仅看Demo视频效果"}},
+      {id:"sys_decomp",label:"系统拆解",type:"认识方法",r:16,detail:{desc:"按感知→决策→控制逐层排查失败原因"}},
+      {id:"evo_analysis",label:"演进分析",type:"认识方法",r:16,detail:{desc:"新方法解决了什么旧问题，又带来什么新限制？"}},
+      {id:"case_grasp",label:"案例：抓取失败排查",type:"分析案例",r:16,detail:{desc:"机械臂抓取成功率仅70%",
+        steps:["感知层：深度相机反光表面噪声大(15%失败)","决策层：细长物体抓取点采样不足(10%失败)","控制层：夹爪闭合时机偏移50ms(5%失败)"],
+        conclusion:"主要瓶颈在感知层（反光表面深度噪声）",
+        remain:"换结构光相机能否解决？成本与精度如何取舍？"}},
+      {id:"case_evo",label:"案例：传统→端到端",type:"分析案例",r:16,detail:{desc:"为什么从传统控制转向学习方法？",
+        old:"MoveIt+PID：结构化环境可靠，但环境变化需重写规则",
+        new:"RL+Sim2Real：可适应变化，但训练成本高、Sim2Real差距大、安全难保证",
+        conclusion:"两条路线是分层协作：高层(语义)用学习，低层(运动/安全)用控制",
+        remain:"混合架构接口标准？安全约束层如何不被绕过？"}},
+      {id:"habit_think",label:"思维习惯",type:"成长习惯",r:14,detail:{desc:"先问'系统瓶颈在哪'再选方法；区分事实与推断；主动寻找反例",
+        action:"每次讨论先画感知→决策→控制数据流"}},
+      {id:"habit_learn",label:"学习习惯",type:"成长习惯",r:14,detail:{desc:"从任务困难反查知识缺口；连接课程；尝试向同学解释",
+        action:"抓取失败→查运动学/力封闭→补对应课程章节"}},
+      {id:"habit_practice",label:"实践习惯",type:"成长习惯",r:14,detail:{desc:"做小规模尝试；保留输入输出；记录失败和不理解之处",
+        action:"在MuJoCo跑最简抓取，保存obs/action/reward日志"}},
+      {id:"habit_manage",label:"管理习惯",type:"成长习惯",r:12,detail:{desc:"拆分每周任务；明确责任人；保留来源和版本",
+        action:"本周：A做领域地图、B做生态、C做认知、D做网站"}},
+      {id:"habit_update",label:"认识更新习惯",type:"成长习惯",r:12,detail:{desc:"比较原有预期与实际结果；判断需要补知识、改方法还是修正假设",
+        action:"以为RL能直接迁移→实际Sim2Real差距巨大→修正假设"}},
+      {id:"correction",label:"认识修正：端到端→分层",type:"认识修正",r:20,detail:{desc:"从'端到端学习最优'修正为'分层协作'",
+        before:"端到端学习（从像素到电机扭矩）是具身智能最优路线，传统控制应被淘汰",
+        trigger:"阅读CoRL 2024论文 + MuJoCo中SAC训练抓取→仿真95%成功，加噪声仅60%；最佳系统(π₀)实际是混合架构",
+        after:"端到端学习和传统控制是分层协作：语义/任务层适合学习（泛化性），运动/安全层适合控制（可靠性与实时性）",
+        remain:"混合架构安全约束设计(CBF)——尚未学习"}}
+    ],
+    links: [
+      {source:"sys_view",target:"sys_decomp",label:"应用"},{source:"dev_view",target:"evo_analysis",label:"应用"},
+      {source:"sys_decomp",target:"case_grasp",label:"实例"},{source:"evo_analysis",target:"case_evo",label:"实例"},
+      {source:"case_evo",target:"correction",label:"触发"},{source:"habit_think",target:"sys_view",label:"培养"},
+      {source:"habit_learn",target:"dev_view",label:"培养"},{source:"habit_practice",target:"case_grasp",label:"支撑"},
+      {source:"habit_update",target:"correction",label:"驱动"},{source:"correction",target:"case_evo",label:"源于"}
+    ]
+  }
+};
+
+// Cross-map links (for detail panel)
+const CROSS_LINKS = {
+  sim2real: {domain:"sim2real", eco:["pi_lab","mujoco_proj","isaac_proj","unitree"], cog:["case_evo","correction"]},
+  rl: {domain:"rl", eco:["corl","berkeley_rail"], cog:["case_evo"]},
+  vla: {domain:"vla", eco:["pi_lab","deepmind","octo_proj","openx"], cog:["correction"]},
+  embodied: {domain:"embodied", eco:["corl","rss","icra"], cog:["sys_view","dev_view","val_view"]},
+  mujoco: {domain:"mujoco", eco:["mujoco_proj","deepmind"], cog:[]},
+  ros2: {domain:"ros2", eco:["franka"], cog:["sys_decomp"]},
+  course_ai3006: {domain:"course_ai3006", eco:[], cog:["habit_learn"]}
+};
+
+// ===== 原生 SVG 布局引擎（零外部依赖） =====
+const NS = 'http://www.w3.org/2000/svg';
+const TYPE_COLORS = {
+  "核心概念":"#38bdf8","方法/技术":"#f59e0b","工具/软件":"#a78bfa","课程":"#fb923c","实践资源":"#6ee7b7",
+  "会议":"#818cf8","实验室/团队":"#f59e0b","企业":"#fb923c","开源项目":"#34d399","数据集/基准":"#f472b6",
+  "认识方法":"#34d399","分析案例":"#f59e0b","成长习惯":"#a78bfa","认识修正":"#f472b6"
+};
+
+let currentMap = 'domain';
+const ST = {
+  nodes: [], pairs: [], W: 1100, H: 750,
+  scale: 1, tx: 0, ty: 0,
+  svg: null, vp: null,
+  linkEls: [], labelEls: [], nodeEls: {},
+  dragNode: null
+};
+
+// --- 布局：BFS 分层 + 碰撞松弛，结果确定，不依赖动画 ---
+function computeLayout(nodes, links, W, H) {
+  const byId = {}, adj = {}, deg = {};
+  nodes.forEach(n => { byId[n.id] = n; adj[n.id] = []; deg[n.id] = 0; });
+
+  links.forEach(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    if (byId[s] && byId[t]) { adj[s].push(t); adj[t].push(s); deg[s]++; deg[t]++; }
+  });
+
+  // 以度数最高的节点为根
+  let root = nodes[0];
+  nodes.forEach(n => { if (deg[n.id] > deg[root.id]) root = n; });
+
+  // BFS 分层
+  const layer = {}; layer[root.id] = 0;
+  const q = [root.id];
+  while (q.length) {
+    const cur = q.shift();
+    adj[cur].forEach(nb => {
+      if (layer[nb] === undefined) { layer[nb] = layer[cur] + 1; q.push(nb); }
+    });
+  }
+  nodes.forEach(n => { if (layer[n.id] === undefined) layer[n.id] = 1; });
+
+  const maxLayer = Math.max.apply(null, nodes.map(n => layer[n.id]));
+  const cx = W / 2, cy = H / 2;
+  const maxR = Math.max(150, Math.min(W, H) / 2 - 95);
+
+  // 初始位置：按层分布到同心圆
+  const byLayer = {};
+  nodes.forEach(n => { (byLayer[layer[n.id]] = byLayer[layer[n.id]] || []).push(n); });
+  Object.keys(byLayer).forEach(k => {
+    const arr = byLayer[k];
+    const lv = Number(k);
+    const R = maxLayer === 0 ? 0 : maxR * lv / maxLayer;
+    arr.sort((a, b) => a.id < b.id ? -1 : 1);
+    arr.forEach((n, i) => {
+      const ang = (i / arr.length) * Math.PI * 2 + lv * 0.6 - Math.PI / 2;
+      n.x = cx + Math.cos(ang) * R;
+      n.y = cy + Math.sin(ang) * R;
+    });
+  });
+
+  // 松弛：标签宽度参与碰撞，避免文字互相压住
+  const labelW = n => Math.min(210, n.label.length * 9 + 12);
+  for (let it = 0; it < 300; it++) {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const p = nodes[i], s = nodes[j];
+        let dx = s.x - p.x, dy = s.y - p.y;
+        let d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 0.5) { dx = 0.5 + i * 0.01; dy = 0.5; d = Math.sqrt(dx * dx + dy * dy); }
+        const minD = Math.max(p.r + s.r + 44, (labelW(p) + labelW(s)) / 2 + 14);
+        if (d < minD) {
+          const push = (minD - d) / d * 0.5;
+          p.x -= dx * push; p.y -= dy * push;
+          s.x += dx * push; s.y += dy * push;
+        }
+      }
+    }
+    nodes.forEach(n => {
+      n.x += (cx - n.x) * 0.006;
+      n.y += (cy - n.y) * 0.006;
+      const m = n.r + 26;
+      n.x = Math.max(m, Math.min(W - m, n.x));
+      n.y = Math.max(m + 8, Math.min(H - m, n.y));
+    });
+  }
+}
+
+function applyTransform() {
+  if (ST.vp) {
+    ST.vp.setAttribute('transform',
+      'translate(' + ST.tx + ',' + ST.ty + ') scale(' + ST.scale + ')');
+  }
+}
+
+function toGraphPoint(e) {
+  const pt = ST.svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const m = ST.vp.getScreenCTM();
+  return m ? pt.matrixTransform(m.inverse()) : { x: e.clientX, y: e.clientY };
+}
+
+function draw() {
+  ST.pairs.forEach((p, i) => {
+    const ln = ST.linkEls[i], lb = ST.labelEls[i];
+    if (!ln || !p.s || !p.t) return;
+    ln.setAttribute('x1', p.s.x); ln.setAttribute('y1', p.s.y);
+    ln.setAttribute('x2', p.t.x); ln.setAttribute('y2', p.t.y);
+    if (lb) {
+      lb.setAttribute('x', (p.s.x + p.t.x) / 2);
+      lb.setAttribute('y', (p.s.y + p.t.y) / 2 - 5);
+    }
+  });
+  ST.nodes.forEach(n => {
+    const g = ST.nodeEls[n.id];
+    if (g) g.setAttribute('transform', 'translate(' + n.x + ',' + n.y + ')');
+  });
+}
+
+function init() {
+  ST.svg = document.getElementById('graphSvg');
+  ST.vp = document.createElementNS(NS, 'g');
+  ST.svg.appendChild(ST.vp);
+
+  // 滚轮缩放
+  ST.svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = toGraphPoint(e);
+    const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const ns = Math.max(0.35, Math.min(3.2, ST.scale * k));
+    const f = ns / ST.scale;
+    ST.tx = p.x - (p.x - ST.tx) * f;
+    ST.ty = p.y - (p.y - ST.ty) * f;
+    ST.scale = ns;
+    applyTransform();
+  }, { passive: false });
+
+  // 背景拖动平移
+  let panning = false, px = 0, py = 0, ptx = 0, pty = 0;
+  ST.svg.addEventListener('pointerdown', e => {
+    if (e.target.closest('g.node')) return;
+    panning = true; px = e.clientX; py = e.clientY;
+    ptx = ST.tx; pty = ST.ty;
+    ST.svg.setPointerCapture(e.pointerId);
+  });
+  ST.svg.addEventListener('pointermove', e => {
+    if (!panning) return;
+    ST.tx = ptx + (e.clientX - px);
+    ST.ty = pty + (e.clientY - py);
+    applyTransform();
+  });
+  ST.svg.addEventListener('pointerup', () => { panning = false; });
+  ST.svg.addEventListener('pointercancel', () => { panning = false; });
+
+  window.addEventListener('resize', () => {
+    clearTimeout(window.__rz);
+    window.__rz = setTimeout(() => renderMap(currentMap), 180);
+  });
+
+  renderMap('domain');
+}
+
+function renderMap(mapId) {
+  currentMap = mapId;
+  const data = DATA[mapId];
+  const area = document.getElementById('graphArea');
+  let W = area.clientWidth, H = area.clientHeight;
+  if (!W || W < 200) W = window.innerWidth - 440;
+  if (!H || H < 200) H = window.innerHeight - 130;
+  ST.W = W; ST.H = H;
+
+  document.getElementById('legend').innerHTML =
+    '<strong style="font-size:.8rem;">' + data.title + '</strong>' +
+    data.legend.map(l => '<div class="legend-item"><div class="legend-dot" style="background:' +
+      l.color + '"></div>' + l.label + '</div>').join('');
+
+  while (ST.vp.firstChild) ST.vp.removeChild(ST.vp.firstChild);
+  ST.linkEls = []; ST.labelEls = []; ST.nodeEls = {};
+
+  ST.svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+  ST.scale = 1; ST.tx = 0; ST.ty = 0;
+  applyTransform();
+
+  computeLayout(data.nodes, data.links, W, H);
+  ST.nodes = data.nodes;
+
+  const byId = {};
+  data.nodes.forEach(n => { byId[n.id] = n; });
+  ST.pairs = data.links.map(l => ({
+    s: byId[typeof l.source === 'object' ? l.source.id : l.source],
+    t: byId[typeof l.target === 'object' ? l.target.id : l.target],
+    label: l.label || ''
+  })).filter(p => p.s && p.t);
+
+  const gLinks = document.createElementNS(NS, 'g');
+  const gLabels = document.createElementNS(NS, 'g');
+  const gNodes = document.createElementNS(NS, 'g');
+  ST.vp.appendChild(gLinks); ST.vp.appendChild(gLabels); ST.vp.appendChild(gNodes);
+
+  ST.pairs.forEach(p => {
+    const ln = document.createElementNS(NS, 'line');
+    ln.setAttribute('class', 'link-line');
+    gLinks.appendChild(ln);
+    ST.linkEls.push(ln);
+
+    const lb = document.createElementNS(NS, 'text');
+    lb.setAttribute('class', 'link-label');
+    lb.textContent = p.label;
+    gLabels.appendChild(lb);
+    ST.labelEls.push(lb);
+  });
+
+  data.nodes.forEach(n => {
+    const g = document.createElementNS(NS, 'g');
+    g.setAttribute('class', 'node');
+    g.setAttribute('data-id', n.id);
+    g.style.cursor = 'pointer';
+
+    const hit = document.createElementNS(NS, 'circle');
+    hit.setAttribute('r', n.r + 10);
+    hit.setAttribute('fill', 'transparent');
+    g.appendChild(hit);
+
+    const dot = document.createElementNS(NS, 'circle');
+    dot.setAttribute('r', n.r);
+    dot.setAttribute('fill', TYPE_COLORS[n.type] || '#94a3b8');
+    dot.setAttribute('stroke', 'rgba(255,255,255,.18)');
+    dot.setAttribute('stroke-width', '2');
+    g.appendChild(dot);
+
+    const tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('class', 'node-label');
+    tx.setAttribute('dy', n.r + 14);
+    tx.textContent = n.label;
+    g.appendChild(tx);
+
+    gNodes.appendChild(g);
+    ST.nodeEls[n.id] = g;
+
+    // 拖动 + 点击（拖动后不触发点击）
+    let sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+    g.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      const p = toGraphPoint(e);
+      sx = p.x; sy = p.y; ox = n.x; oy = n.y; moved = false;
+      ST.dragNode = n;
+      g.setPointerCapture(e.pointerId);
+    });
+    g.addEventListener('pointermove', e => {
+      if (ST.dragNode !== n) return;
+      const p = toGraphPoint(e);
+      if (Math.abs(p.x - sx) + Math.abs(p.y - sy) > 3) moved = true;
+      n.x = ox + (p.x - sx);
+      n.y = oy + (p.y - sy);
+      draw();
+    });
+    g.addEventListener('pointerup', e => {
+      if (ST.dragNode === n) ST.dragNode = null;
+      if (!moved) showDetail(currentMap, n);
+    });
+  });
+
+  draw();
+  document.getElementById('detailContent').innerHTML =
+    '<h2>👈 点击节点查看详情</h2>' +
+    '<p style="color:var(--text2);font-size:.85rem;margin-top:1rem;">当前地图：' + data.title +
+    '。点击任意节点查看说明、关联概念、课程与跨地图链接；可拖动节点、滚轮缩放、空白处拖动画布。</p>';
+}
+
+function switchMap(mapId) {
+  document.querySelectorAll('.tab').forEach(t => {
+    t.className = 'tab';
+    if (t.dataset.map === mapId) {
+      t.classList.add('active-' + (mapId === 'domain' ? 'domain' : mapId === 'eco' ? 'eco' : 'cog'));
+    }
+  });
+  renderMap(mapId);
+}
+
+function showDetail(mapId, d) {
+  const colorMap = {"核心概念":"tag-domain","方法/技术":"tag-domain","工具/软件":"tag-domain","课程":"tag-domain","实践资源":"tag-domain",
+    "会议":"tag-eco","实验室/团队":"tag-eco","企业":"tag-eco","开源项目":"tag-eco","数据集/基准":"tag-eco",
+    "认识方法":"tag-cog","分析案例":"tag-cog","成长习惯":"tag-cog","认识修正":"tag-cog"};
+  const tagClass = colorMap[d.type] || 'tag-domain';
+  const det = d.detail || {};
+
+  let html = `<h2>${d.label}</h2><span class="tag ${tagClass}">${d.type}</span>`;
+  if (det.desc) html += `<div class="section"><h3>📝 说明</h3><p>${det.desc}</p></div>`;
+  if (det.questions) html += `<div class="section"><h3>❓ 核心问题</h3><ul>${det.questions.map(q=>`<li>${q}</li>`).join('')}</ul></div>`;
+  if (det.concepts) html += `<div class="section"><h3>💡 涉及概念</h3><ul>${det.concepts.map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  if (det.tools) html += `<div class="section"><h3>🔧 工具</h3><ul>${det.tools.map(t=>`<li>${t}</li>`).join('')}</ul></div>`;
+  if (det.methods) html += `<div class="section"><h3>🛤️ 方法</h3><ul>${det.methods.map(m=>`<li>${m}</li>`).join('')}</ul></div>`;
+  if (det.algorithms) html += `<div class="section"><h3>⚙️ 算法</h3><ul>${det.algorithms.map(a=>`<li>${a}</li>`).join('')}</ul></div>`;
+  if (det.models) html += `<div class="section"><h3>🧠 模型</h3><ul>${det.models.map(m=>`<li>${m}</li>`).join('')}</ul></div>`;
+  if (det.behind) html += `<div class="section"><h3>🔗 背后概念</h3><p>${det.behind}</p></div>`;
+  if (det.need) html += `<div class="section"><h3>📖 使用前需了解</h3><p>${det.need}</p></div>`;
+  if (det.course) html += `<div class="section"><h3>📚 课程关联</h3><p>${det.course}</p></div>`;
+  if (det.relation) html += `<div class="section"><h3>📌 关系类型</h3><p>${det.relation}</p></div>`;
+  if (det.covers) html += `<div class="section"><h3>✅ 覆盖内容</h3><ul>${det.covers.map(c=>`<li>${c}</li>`).join('')}</ul></div>`;
+  if (det.limit) html += `<div class="section"><h3>⚠️ 局限</h3><p>${det.limit}</p></div>`;
+  if (det.ref) html += `<div class="section"><h3>📎 参考文献</h3><p>${det.ref}</p></div>`;
+  if (det.level) html += `<div class="section"><h3>📊 理解程度</h3><p>${det.level}</p></div>`;
+  if (det.note) html += `<div class="section"><h3>⚠️ 备注</h3><p>${det.note}</p></div>`;
+  if (det.related) html += `<div class="section"><h3>🌐 生态关联</h3><ul>${det.related.map(r=>`<li>${r}</li>`).join('')}</ul></div>`;
+  if (det.contribution) html += `<div class="section"><h3>🏆 主要贡献</h3><p>${det.contribution}</p></div>`;
+  if (det.example) html += `<div class="section"><h3>🔍 应用示例</h3><p>${det.example}</p></div>`;
+  if (det.steps) html += `<div class="section"><h3>📋 分析步骤</h3><ol>${det.steps.map(s=>`<li>${s}</li>`).join('')}</ol></div>`;
+  if (det.conclusion) html += `<div class="section"><h3>✅ 当前判断</h3><p>${det.conclusion}</p></div>`;
+  if (det.remain) html += `<div class="section"><h3>❓ 尚存疑问</h3><p>${det.remain}</p></div>`;
+  if (det.old) html += `<div class="section"><h3>📖 旧方法</h3><p>${det.old}</p></div>`;
+  if (det.new) html += `<div class="section"><h3>🆕 新方法</h3><p>${det.new}</p></div>`;
+  if (det.before) html += `<div class="section"><h3>🔴 原来以为</h3><p>${det.before}</p></div>`;
+  if (det.trigger) html += `<div class="section"><h3>⚡ 变化触发</h3><p>${det.trigger}</p></div>`;
+  if (det.after) html += `<div class="section"><h3>🟢 现在理解</h3><p>${det.after}</p></div>`;
+  if (det.action) html += `<div class="section"><h3>👉 可做行动</h3><p>${det.action}</p></div>`;
+  if (det.usage) html += `<div class="section"><h3>📦 用途</h3><p>${det.usage}</p></div>`;
+
+  // Cross-map links
+  const cl = CROSS_LINKS[d.id];
+  if (cl) {
+    html += `<div class="section"><h3>🔀 跨地图链接</h3>`;
+    if (cl.eco && cl.eco.length) html += `<p style="font-size:.72rem;color:var(--node-eco);">生态地图：</p>` + cl.eco.map(id => {
+      const n = DATA.eco.nodes.find(n=>n.id===id);
+      return n ? `<span class="cross-link" onclick="jumpTo('eco','${id}')">${n.label}</span>` : '';
+    }).join('');
+    if (cl.cog && cl.cog.length) html += `<p style="font-size:.72rem;color:var(--node-cog);margin-top:4px;">认知地图：</p>` + cl.cog.map(id => {
+      const n = DATA.cog.nodes.find(n=>n.id===id);
+      return n ? `<span class="cross-link" onclick="jumpTo('cog','${id}')">${n.label}</span>` : '';
+    }).join('');
+    html += `</div>`;
+  }
+
+  document.getElementById('detailContent').innerHTML = html;
+}
+
+function jumpTo(mapId, nodeId) {
+  switchMap(mapId);
+  const d = DATA[mapId].nodes.find(n => n.id === nodeId);
+  if (!d) return;
+  if (d.x !== undefined && d.y !== undefined) {
+    ST.tx = ST.W / 2 - d.x * ST.scale;
+    ST.ty = ST.H / 2 - d.y * ST.scale;
+    applyTransform();
+  }
+  showDetail(mapId, d);
+  const g = ST.nodeEls[nodeId];
+  if (g) {
+    g.style.transition = 'filter .25s';
+    g.style.filter = 'brightness(1.9)';
+    setTimeout(() => { g.style.filter = ''; }, 900);
+  }
+}
+
+function zoomBy(k) {
+  const p = { x: ST.W / 2, y: ST.H / 2 };
+  const ns = Math.max(0.35, Math.min(3.2, ST.scale * k));
+  const f = ns / ST.scale;
+  ST.tx = p.x - (p.x - ST.tx) * f;
+  ST.ty = p.y - (p.y - ST.ty) * f;
+  ST.scale = ns;
+  applyTransform();
+}
+function zoomIn() { zoomBy(1.25); }
+function zoomOut() { zoomBy(1 / 1.25); }
+function resetZoom() { ST.scale = 1; ST.tx = 0; ST.ty = 0; applyTransform(); }
+
+// AI Query：先做本地检索（离线可用），有 Key 时再叠加 LLM 解释
+async function aiQuery() {
+  const q = document.getElementById('aiInput').value.trim();
+  if (!q) return;
+  const resultEl = document.getElementById('aiResult');
+  resultEl.style.display = 'block';
+
+  // --- 本地检索：在所有三张地图里找匹配节点 ---
+  const hits = [];
+  ['domain', 'eco', 'cog'].forEach(mid => {
+    DATA[mid].nodes.forEach(n => {
+      const text = (n.label + ' ' + n.type + ' ' + (n.detail && n.detail.desc ? n.detail.desc : '')).toLowerCase();
+      const kws = q.toLowerCase().split(/[\s,，。?？]+/).filter(Boolean);
+      let score = 0;
+      kws.forEach(k => { if (text.indexOf(k) >= 0) score += k.length; });
+      if (n.label.toLowerCase().indexOf(q.toLowerCase()) >= 0) score += 20;
+      if (score > 0) hits.push({ map: mid, node: n, score: score });
+    });
+  });
+  hits.sort((a, b) => b.score - a.score);
+
+  let html = '';
+  if (hits.length) {
+    const top = hits.slice(0, 4);
+    html += '<p style="font-size:.78rem;color:var(--text2);margin-bottom:.5rem;">📚 地图中找到 ' +
+      hits.length + ' 个相关节点：</p>';
+    top.forEach(h => {
+      const mapName = h.map === 'domain' ? '领域' : h.map === 'eco' ? '生态' : '认知';
+      const det = h.node.detail || {};
+      html += '<div style="border-left:3px solid var(--accent);padding-left:.6rem;margin:.5rem 0;">' +
+        '<a href="javascript:void(0)" onclick="jumpTo(\'' + h.map + '\',\'' + h.node.id + '\')" ' +
+        'style="font-weight:600;">' + h.node.label + '</a>' +
+        '<span class="tag ' + (h.map === 'domain' ? 'tag-domain' : h.map === 'eco' ? 'tag-eco' : 'tag-cog') +
+        '" style="margin-left:.4rem;">' + mapName + '·' + h.node.type + '</span>' +
+        '<p style="font-size:.78rem;color:var(--text2);margin-top:.2rem;">' + (det.desc || '') + '</p>' +
+        '</div>';
+    });
+  } else {
+    html += '<p style="font-size:.8rem;color:var(--text2);">地图中暂未找到直接相关的节点。' +
+      '可以换一个关键词（如 Sim2Real、强化学习、CoRL、系统拆解），或在下方用大模型补充解释。</p>';
+  }
+
+  // --- 可选：叠加服务端大模型解释（Key 只存在服务器，前端从不接触） ---
+  if (LLM_ENABLED) {
+    html += '<p id="llmOut" style="font-size:.8rem;color:var(--accent);margin-top:.6rem;">⏳ 正在生成解释…</p>';
+  } else {
+    html += '<p style="font-size:.72rem;color:var(--text2);margin-top:.6rem;">' +
+      '💡 以上为地图内容检索结果。站点未启用大模型解释服务时，检索结果仍可直接使用。</p>';
+  }
+  resultEl.innerHTML = html;
+
+  if (!LLM_ENABLED) return;
+  const context = DATA[currentMap].nodes
+    .map(n => n.label + '(' + n.type + ')：' + (n.detail && n.detail.desc ? n.detail.desc : ''))
+    .join('\n');
+  try {
+    const resp = await fetch('/api/explain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q, context: context })
+    });
+    const json = await resp.json();
+    const out = document.getElementById('llmOut');
+    if (json.answer && out) {
+      out.style.color = 'var(--text)';
+      out.innerHTML = '<strong style="color:var(--accent2);">🤖 大模型解释：</strong>' +
+        String(json.answer).replace(/\n/g, '<br>') +
+        '<br><span style="font-size:.7rem;color:var(--danger);">⚠️ AI 生成，请对照地图核实；无依据部分应视为待核实</span>';
+    } else if (out) {
+      out.innerHTML = '<span style="color:var(--danger);">大模型服务返回异常：' +
+        ((json.error && json.error.message) || '未知错误') + '（地图检索结果仍然可用）</span>';
+    }
+  } catch (e) {
+    const out = document.getElementById('llmOut');
+    if (out) out.innerHTML = '<span style="color:var(--danger);">大模型服务不可用（地图检索结果仍然可用）。</span>';
+  }
+}
+
+// 站点是否部署了 /api/explain（Key 由托管平台环境变量提供，前端不接触）
+let LLM_ENABLED = false;
+(function probeLLM() {
+  fetch('/api/explain', { method: 'GET' })
+    .then(r => r.json().catch(() => ({})))
+    .then(j => {
+      LLM_ENABLED = !!(j && j.ok);
+      const el = document.getElementById('aiInput');
+      if (el && !LLM_ENABLED) el.placeholder = '🔍 例如：Sim2Real 是什么？谁在做具身智能？';
+    })
+    .catch(() => {});
+})();
+
+// 启动：DOM 就绪即渲染（不依赖任何外部库）
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
