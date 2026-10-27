@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>神经网络为什么能学习 · 三张活地图</title>
+<style>
+:root{
+  --bg:#080e1a; --bg2:#0b1526; --surface:#0f1b2d; --surface2:#132238;
+  --border:#1e3350; --border2:#28415f;
+  --text:#e8eef7; --text2:#8fa6c4; --text3:#5f7796;
+  --cyan:#38bdf8; --violet:#a78bfa; --orange:#fb923c; --green:#34d399;
+  --pink:#f472b6; --amber:#fbbf24; --slate:#94a3b8; --indigo:#818cf8;
+  --danger:#f87171;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  background:
+    radial-gradient(1100px 600px at 15% -10%, rgba(56,189,248,.10), transparent 60%),
+    radial-gradient(900px 500px at 85% 0%, rgba(167,139,250,.10), transparent 55%),
+    linear-gradient(180deg,#080e1a 0%,#0a1220 100%);
+  color:var(--text); line-height:1.65; -webkit-font-smoothing:antialiased;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background-image:
+    linear-gradient(rgba(56,189,248,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56,189,248,.045) 1px, transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 30%, #000 30%, transparent 78%);
+  mask-image:radial-gradient(ellipse at 50% 30%, #000 30%, transparent 78%);
+}
+a{color:var(--cyan);text-decoration:none}
+code,.mono{font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace}
+
+/* header */
+.header{position:relative;z-index:2;padding:1.5rem 2rem 1rem;display:flex;align-items:flex-start;gap:1.4rem;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:.2rem}
+.brand h1{
+  font-family:Georgia,"Songti SC",serif; font-size:1.55rem; font-weight:600; letter-spacing:.01em;
+  background:linear-gradient(92deg,#e8f4ff,#8fd3ff 45%,#b9a3ff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.brand .sub{font-size:.8rem;color:var(--text2)}
+.brand .sub b{color:var(--cyan);font-weight:600}
+.stats{margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:.35rem;
+  padding:.3rem .7rem;border-radius:999px;font-size:.72rem;
+  background:rgba(19,34,56,.8);border:1px solid var(--border);color:var(--text2);
+}
+.chip b{color:var(--text);font-weight:600}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+
+/* tabs */
+.tabs{position:relative;z-index:2;display:flex;gap:.4rem;padding:0 2rem;flex-wrap:wrap}
+.tab{
+  padding:.5rem 1.05rem;border-radius:10px 10px 0 0;cursor:pointer;font-size:.85rem;
+  color:var(--text3);border:1px solid transparent;border-bottom:none;transition:.18s;user-select:none;
+}
+.tab:hover{color:var(--text2);background:rgba(19,34,56,.5)}
+.tab.on-domain{color:var(--cyan);background:var(--surface);border-color:var(--border);box-shadow:inset 0 2px 0 var(--cyan)}
+.tab.on-eco{color:var(--indigo);background:var(--surface);border-color:var(--border);box-shadow:inset 0 2px 0 var(--indigo)}
+.tab.on-cog{color:var(--green);background:var(--surface);border-color:var(--border);box-shadow:inset 0 2px 0 var(--green)}
+
+/* pipeline */
+.pipeline{
+  position:relative;z-index:2;display:flex;align-items:center;gap:.25rem;
+  padding:.55rem 2rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);
+  background:rgba(11,21,38,.72);overflow-x:auto;
+}
+.pipeline .lab{font-size:.7rem;color:var(--text3);margin-right:.5rem;white-space:nowrap}
+.step{
+  padding:.22rem .6rem;border-radius:6px;font-size:.72rem;white-space:nowrap;cursor:pointer;
+  color:var(--text2);border:1px solid var(--border);background:rgba(15,27,45,.9);transition:.15s;
+}
+.step:hover{color:var(--text);border-color:var(--cyan);box-shadow:0 0 12px rgba(56,189,248,.25)}
+.arrow{color:var(--text3);font-size:.7rem}
+
+/* main */
+.main{position:relative;z-index:1;display:flex;height:calc(100vh - 168px);min-height:440px}
+.graph-area{flex:1;position:relative;overflow:hidden}
+.graph-area svg{width:100%;height:100%;display:block}
+.detail{
+  width:410px;flex:0 0 410px;border-left:1px solid var(--border);overflow-y:auto;
+  padding:1.2rem 1.3rem 3rem;background:linear-gradient(180deg,rgba(15,27,45,.96),rgba(11,21,38,.96));
+}
+.detail::-webkit-scrollbar{width:8px}
+.detail::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* graph */
+.link-line{stroke:rgba(120,160,210,.22);stroke-width:1.3;fill:none}
+.link-line.hl{stroke:rgba(56,189,248,.85);stroke-width:2}
+.link-label{font-size:9px;fill:var(--text3);text-anchor:middle;pointer-events:none;letter-spacing:.02em}
+.node-label{font-size:11.5px;fill:var(--text2);text-anchor:middle;pointer-events:none;letter-spacing:.01em}
+.node:hover .node-label{fill:#fff}
+.node:hover .dot{filter:url(#glow)}
+.node.sel .dot{stroke:#fff;stroke-width:2.5}
+.node.sel .node-label{fill:#fff;font-weight:600}
+
+/* detail */
+.detail h2{font-family:Georgia,"Songti SC",serif;font-size:1.12rem;line-height:1.4;margin-bottom:.5rem}
+.tag{display:inline-block;padding:.12rem .5rem;border-radius:5px;font-size:.68rem;margin-right:.3rem;border:1px solid}
+.sec{margin-top:.9rem;padding-top:.75rem;border-top:1px dashed var(--border)}
+.sec h3{font-size:.72rem;color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;margin-bottom:.3rem;font-weight:600}
+.sec p{font-size:.83rem;color:var(--text2)}
+.sec ul,.sec ol{padding-left:1.1rem;font-size:.82rem;color:var(--text2)}
+.sec li{margin:.16rem 0}
+.formula{
+  font-family:"JetBrains Mono",Consolas,monospace;font-size:.8rem;
+  background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.2);border-left:3px solid var(--cyan);
+  border-radius:6px;padding:.5rem .65rem;margin:.35rem 0;color:#bfe4ff;overflow-x:auto;white-space:pre-wrap
+}
+.cross{display:inline-block;padding:.2rem .55rem;margin:.15rem .2rem .15rem 0;border-radius:6px;font-size:.72rem;
+  cursor:pointer;background:rgba(56,189,248,.07);border:1px solid var(--border2);color:var(--text2)}
+.cross:hover{border-color:var(--cyan);color:var(--cyan)}
+.hint{font-size:.78rem;color:var(--text3);margin-top:.6rem}
+
+/* legend & zoom */
+.legend{
+  position:absolute;top:.85rem;left:.85rem;z-index:5;max-width:215px;
+  background:rgba(10,18,32,.88);border:1px solid var(--border);border-radius:10px;padding:.65rem .75rem;
+  font-size:.7rem;backdrop-filter:blur(6px);
+}
+.legend .t{font-size:.72rem;color:var(--text);font-weight:600;margin-bottom:.35rem}
+.lg{display:flex;align-items:center;gap:.4rem;margin:.18rem 0;color:var(--text2)}
+.lg i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 8px currentColor}
+.zoom{position:absolute;top:.85rem;right:.85rem;z-index:5;display:flex;flex-direction:column;gap:.3rem}
+.zbtn{
+  width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:rgba(15,27,45,.92);
+  color:var(--text2);cursor:pointer;font-size:.95rem;display:flex;align-items:center;justify-content:center;transition:.15s;
+}
+.zbtn:hover{color:var(--cyan);border-color:var(--cyan)}
+
+/* ask */
+.ask{position:absolute;left:.85rem;right:.85rem;bottom:.85rem;z-index:6;display:flex;gap:.45rem}
+.ask input{
+  flex:1;padding:.6rem .9rem;border-radius:9px;border:1px solid var(--border);
+  background:rgba(10,18,32,.94);color:var(--text);font-size:.82rem;outline:none;backdrop-filter:blur(6px);
+}
+.ask input:focus{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(56,189,248,.12)}
+.ask button{
+  padding:.6rem 1rem;border-radius:9px;border:1px solid var(--cyan);cursor:pointer;font-size:.8rem;font-weight:600;
+  background:rgba(56,189,248,.14);color:#bfe9ff;transition:.15s;
+}
+.ask button:hover{background:rgba(56,189,248,.24)}
+.answer{
+  position:absolute;left:.85rem;right:.85rem;bottom:3.5rem;z-index:6;max-height:46%;overflow-y:auto;
+  background:rgba(10,18,32,.97);border:1px solid var(--border2);border-radius:10px;padding:.8rem .9rem;
+  font-size:.8rem;backdrop-filter:blur(8px);box-shadow:0 16px 40px rgba(0,0,0,.45);
+}
+.answer h4{font-size:.72rem;color:var(--text3);letter-spacing:.05em;margin-bottom:.4rem}
+.hit{border-left:3px solid var(--cyan);padding:.15rem 0 .15rem .55rem;margin:.45rem 0}
+.hit a{font-weight:600}
+.hit p{font-size:.76rem;color:var(--text2);margin-top:.15rem}
+.warn{font-size:.7rem;color:var(--danger);margin-top:.4rem}
+.muted{font-size:.72rem;color:var(--text3);margin-top:.5rem}
+
+/* supplementary */
+.supp{position:relative;z-index:1;padding:2rem;border-top:1px solid var(--border);background:rgba(8,14,26,.7)}
+.supp h2{font-family:Georgia,"Songti SC",serif;font-size:1.05rem;margin-bottom:1rem}
+.supp h3{font-size:.86rem;color:var(--cyan);margin:1.2rem 0 .4rem}
+.supp p,.supp li{font-size:.8rem;color:var(--text2)}
+.supp ul{padding-left:1.2rem}
+.supp strong{color:var(--text)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.9rem;margin-top:.5rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:.9rem}
+.card h4{font-size:.78rem;margin-bottom:.3rem}
+.card p{font-size:.78rem;color:var(--text2)}
+table{width:100%;border-collapse:collapse;font-size:.76rem;margin-top:.4rem}
+th,td{padding:.4rem .5rem;border:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:rgba(15,27,45,.9);color:var(--text);font-weight:600}
+td{color:var(--text2)}
+.footer{position:relative;z-index:1;padding:.9rem 2rem;border-top:1px solid var(--border);font-size:.72rem;color:var(--text3)}
+@media (max-width:860px){
+  .header{padding:1rem}
+  .tabs,.pipeline{padding-left:1rem;padding-right:1rem}
+  .detail{position:fixed;inset:auto 0 0 0;width:100%;flex:none;height:56%;border-left:none;
+    border-top:1px solid var(--border);border-radius:14px 14px 0 0;z-index:20;transform:translateY(100%);transition:.25s}
+  .detail.open{transform:translateY(0)}
+  .main{height:calc(100vh - 150px)}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div class="header">
+  <div class="brand">
+    <h1>神经网络为什么能学习</h1>
+    <div class="sub">数学与算法基础 · 三张活地图 · 主线：<b>手搓一个 MLP，在 MNIST 上训到 98%</b></div>
+  </div>
+  <div class="stats">
+    <span class="chip"><span class="dot"></span>云端可访问</span>
+    <span class="chip">节点 <b id="statN">—</b></span>
+    <span class="chip">关系 <b id="statL">—</b></span>
+    <span class="chip">更新 <b>2026-10-27</b></span>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab on-domain" data-map="domain" onclick="switchMap('domain')">领域地图</div>
+  <div class="tab" data-map="eco" onclick="switchMap('eco')">生态地图</div>
+  <div class="tab" data-map="cog" onclick="switchMap('cog')">认知地图</div>
+</div>
+
+<div class="pipeline" id="pipeline"></div>
+
+<div class="main">
+  <div class="graph-area" id="graphArea">
+    <svg id="graphSvg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="legend" id="legend"></div>
+    <div class="zoom">
+      <button class="zbtn" onclick="zoomIn()" title="放大">+</button>
+      <button class="zbtn" onclick="zoomOut()" title="缩小">−</button>
+      <button class="zbtn" onclick="resetZoom()" title="复位">⟲</button>
+    </div>
+    <div class="answer" id="aiResult" style="display:none"></div>
+    <div class="ask">
+      <input id="aiInput" placeholder="问一句，例如：交叉熵为什么等于最大似然？谁提出了初始化方法？" onkeydown="if(event.key==='Enter')aiQuery()">
+      <button onclick="aiQuery()">检索</button>
+    </div>
+  </div>
+  <div class="detail" id="detailPanel">
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<div class="supp">
+  <h2>提交材料与自查</h2>
+
+  <h3>一、选题与研究边界</h3>
+  <p>我们研究「<strong>数学与算法基础</strong>」领域，希望帮助同学理解：一个神经网络<strong>为什么</strong>能从数据中学到东西——不是「调包能跑」，而是每一步背后用了什么数学、这些数学各自解决什么问题、失效时又是什么样子。典型任务：<strong>从零手写一个多层感知机，在 MNIST 上训练到 98% 准确率</strong>。沿「数据 → 初始化 → 前向 → 损失 → 反向传播 → 优化 → 泛化」这条链路，把线性代数、概率统计、微积分与优化、数值计算分别落在哪个环节讲清楚。暂不展开 Transformer 架构细节、分布式训练与硬件加速，也不进入测度论与泛函分析层面的严格证明。成长取向：<strong>AI 科学家</strong>（追问原理、区分证据与猜测、保留反例）。</p>
+
+  <h3>二、更新记录</h3>
+  <table>
+    <tr><th>日期</th><th>对象</th><th>依据</th><th>修改内容</th><th>原因</th></tr>
+    <tr><td>2026-10-23</td><td>全站</td><td>课程讲义 + 公开论文</td><td>首版以「具身智能」为题搭建三图框架</td><td>确定作业形态</td></tr>
+    <tr><td>2026-10-27</td><td>全站</td><td>小组讨论 + 培养方案</td><td><strong>整体更换选题为「数学与算法基础」</strong>，重写三张地图内容与 UI（Distill 式可视化风）</td><td>原选题偏系统集成，本科阶段难以讲出「为什么」；换到数学基础更能体现原理追问，也更贴合 AI 科学家取向</td></tr>
+    <tr><td>2026-10-27</td><td>领域地图</td><td>2026 级人工智能专业培养方案</td><td>课程关联改用真实课程号与学分（MATH1135G/1136G/1232G/2432F、AI2003M/2004M、AI3002M、CS3256M），并标注五级关系</td><td>作业要求课程关联须以培养方案为依据，不能凭课名猜测</td></tr>
+    <tr><td>2026-10-27</td><td>认知地图</td><td>Zhang et al. 2017；Belkin et al. 2019；本组实验</td><td>新增「过拟合是唯一敌人 → 双下降」认识修正</td><td>阅读与实验共同推翻了原有判断</td></tr>
+    <tr><td>待补</td><td>互评</td><td>—</td><td>同学反馈与处理结果</td><td>中期互评后填写</td></tr>
+  </table>
+
+  <h3>三、同学反馈与处理</h3>
+  <table>
+    <tr><th>同学反馈</th><th>核实方式</th><th>处理结果</th><th>理由</th></tr>
+    <tr><td colspan="4" style="color:var(--text3)">互评尚未进行。计划请 3 位非本组同学各自独立浏览，先不看讲解，记录卡点，再逐条核实并回填。</td></tr>
+  </table>
+
+  <h3>四、认识修正实例</h3>
+  <div class="grid2">
+    <div class="card"><h4 style="color:#f87171">原来以为</h4><p>只要模型够大、数据够多，测试准确率就会一直涨；过拟合是唯一要防的敌人。</p></div>
+    <div class="card"><h4 style="color:#38bdf8">什么触发了变化</h4><p>读 Zhang et al. 2017（网络能记住随机标签却仍能泛化）与 Belkin et al. 2019（双下降）；本组把隐藏层从 16 加到 512，测试误差先升后降，与课本 U 型曲线不符。</p></div>
+    <div class="card"><h4 style="color:#34d399">现在怎么理解</h4><p>泛化不是「参数少就好」，而是<strong>归纳偏置 + 优化轨迹 + 数据分布</strong>共同作用；经典偏差—方差权衡只在参数不足的区域成立，过参数化区域存在「双下降」。</p></div>
+    <div class="card"><h4 style="color:#fbbf24">还不知道什么</h4><p>双下降的完整理论解释仍在发展中；SGD 的隐式正则究竟来自哪一步，我们没有能力验证。</p></div>
+  </div>
+
+  <h3>五、尚未解决的问题与后续学习入口</h3>
+  <ul>
+    <li>COLT 在 CCF 推荐目录中的归类<strong>待核实</strong>（当前只标注「学习理论专门会议」）</li>
+    <li>万能逼近定理只保证「存在」，不保证梯度下降可达——严格条件需读 Hornik 1989 原文</li>
+    <li>双下降的理论机制：后续学习 <strong>CS3256M 高级机器学习</strong> 与统计学习理论</li>
+    <li>BatchNorm 为何有效的争论（内部协变量偏移 vs 损失面平滑）尚无定论，标记为争议</li>
+  </ul>
+
+  <h3>六、AI 能力说明</h3>
+  <p>检索框默认使用<strong>跨三张地图的内容检索</strong>（纯前端、离线可用）：输入问题后定位相关节点、显示说明与公式，可一键跳转。站点若配置了服务端解释接口，会在检索结果之上追加<strong>大模型解释</strong>——密钥保存在服务器环境变量，<strong>不向访问者索取任何个人密钥</strong>；回答被限制为「只依据地图内容」，无依据时必须回答「地图中未覆盖，需要进一步核实」，页面同时标注「AI 生成，请对照地图核实」。</p>
+
+  <h3>七、团队分工</h3>
+  <table>
+    <tr><th>成员</th><th>主要任务</th><th>贡献</th></tr>
+    <tr><td>成员 A</td><td>领域地图 + 选题</td><td>待填写</td></tr>
+    <tr><td>成员 B</td><td>生态地图</td><td>待填写</td></tr>
+    <tr><td>成员 C</td><td>认知地图</td><td>待填写</td></tr>
+    <tr><td>成员 D</td><td>网站开发 + AI 能力</td><td>待填写</td></tr>
+  </table>
+</div>
+
+<div class="footer">神经网络为什么能学习 · 三张活地图 | 人工智能前沿与创新 · 课程大作业 | 2026 秋冬 | 最后更新 2026-10-27</div>
+
+<script>
+/* ============ 数据层 ============ */
+const N = (id, label, type, r, detail) => ({ id: id, label: label, type: type, r: r, detail: detail || {} });
+const L = (source, target, label) => ({ source: source, target: target, label: label });
+
+const DATA = {
+  domain: {
+    title: "领域地图 · 数学与算法基础",
+    legend: [
+      { color: "#38bdf8", label: "数学基础" },
+      { color: "#a78bfa", label: "模型结构" },
+      { color: "#fb923c", label: "优化训练" },
+      { color: "#34d399", label: "泛化理论" },
+      { color: "#f472b6", label: "工具框架" },
+      { color: "#fbbf24", label: "课程" },
+      { color: "#94a3b8", label: "实践资源" }
+    ],
+    pipeline: [
+      { id: "dataset", label: "数据" },
+      { id: "init", label: "初始化" },
+      { id: "mlp", label: "前向" },
+      { id: "loss", label: "损失" },
+      { id: "backprop", label: "反向传播" },
+      { id: "sgd", label: "优化" },
+      { id: "generalization", label: "泛化" }
+    ],
+    nodes: [
+      N("tensor", "张量·矩阵乘", "数学基础", 16, {
+        desc: "网络的输入、权重、激活值全是张量；一个线性层就是一次矩阵乘法加偏置。",
+        formula: "y = Wx + b,  W ∈ R^(m×n)",
+        why: "矩阵乘法把 n 维输入映射到 m 维特征空间——这是「表示」在数学上的最小单位。",
+        course: "MATH1232G 线性代数（甲）· 3.5 学分",
+        level: "已初步理解"
+      }),
+      N("activation", "激活函数", "模型结构", 15, {
+        desc: "引入非线性。若没有它，任意层堆叠都等价于一次线性变换，深度就失去意义。",
+        formula: "ReLU(z) = max(0, z)\nSigmoid(z) = 1 / (1 + e^(-z))",
+        why: "非线性是「万能逼近」的前提条件；线性组合永远只能画直线。",
+        level: "已初步理解"
+      }),
+      N("mlp", "多层感知机", "模型结构", 19, {
+        desc: "线性层 + 激活堆叠而成的网络，本组手搓任务的主体结构。",
+        formula: "h1 = ReLU(W1 x + b1)\ny_hat = softmax(W2 h1 + b2)",
+        why: "它足够小，可以一行一行手写前向与反向；又足够真，能到 98%。",
+        level: "已经尝试（手写并跑通）"
+      }),
+      N("universal", "万能逼近定理", "模型结构", 14, {
+        desc: "单隐层网络可以任意精度逼近任意连续函数。注意它只保证「存在」，不保证梯度下降一定找得到。",
+        formula: "对任意连续 f 与 ε>0，存在网络 g，使得 |f(x) − g(x)| < ε",
+        ref: "Cybenko 1989；Hornik 1989",
+        level: "待深入学习"
+      }),
+      N("loss", "损失函数", "优化训练", 16, {
+        desc: "把「预测得多错」压缩成一个标量，才可能对它求导。分类任务常用交叉熵。",
+        formula: "L = − Σ y_i · log(y_hat_i)",
+        why: "损失函数决定优化的地形；换损失就是换地形。",
+        level: "已初步理解"
+      }),
+      N("mle", "最大似然估计", "数学基础", 14, {
+        desc: "交叉熵不是随手选的：最小化交叉熵等价于最大化数据在模型下的似然。",
+        formula: "θ* = argmax Σ log p(y_i | x_i ; θ)",
+        why: "这一步把「损失函数」和「概率假设」接上了——两者是同一件事的两种写法。",
+        course: "MATH2432F 概率论与数理统计 · 2.5 学分",
+        level: "已初步理解"
+      }),
+      N("softmax", "Softmax", "优化训练", 13, {
+        desc: "把 logits 变成概率分布。直接算 e^z 会溢出，因此要减去最大值再做指数。",
+        formula: "y_hat_i = e^(z_i) / Σ e^(z_j)\n数值稳定：先减 max(z)",
+        level: "已经尝试"
+      }),
+      N("grad", "梯度与偏导", "数学基础", 15, {
+        desc: "损失对每个参数的方向导数；梯度指向上升最快方向，取负方向即下降。",
+        formula: "∇L = (∂L/∂θ1, …, ∂L/∂θn)",
+        course: "MATH1135G / MATH1136G 微积分（甲）· 5.0 + 5.0 学分",
+        level: "已初步理解"
+      }),
+      N("chain", "链式法则", "数学基础", 17, {
+        desc: "反向传播的全部数学，就是链式法则在计算图上反复应用。",
+        formula: "∂L/∂w = (∂L/∂y_hat) · (∂y_hat/∂z) · (∂z/∂w)",
+        why: "复合函数求导——这一句话撑起了整个深度学习。",
+        level: "已初步理解"
+      }),
+      N("backprop", "反向传播", "优化训练", 19, {
+        desc: "从损失往回逐层计算梯度，复用前向的中间结果，代价与前向同阶。",
+        formula: "δ_l = (W_(l+1)^T · δ_(l+1)) ⊙ σ'(z_l)\n∂L/∂W_l = δ_l · a_(l-1)^T",
+        ref: "Rumelhart, Hinton & Williams 1986",
+        level: "已经尝试（手写两层反向）"
+      }),
+      N("autograd", "自动微分", "工具框架", 15, {
+        desc: "框架把前向计算记录成计算图，反向自动求导。会手写之后再看它，才知道它替你做了什么。",
+        formula: "前向建图 → 反向按拓扑逆序累加梯度",
+        level: "已初步理解"
+      }),
+      N("sgd", "随机梯度下降", "优化训练", 17, {
+        desc: "用一个小批量估计全量梯度。噪声是缺点，也是逃离鞍点的来源。",
+        formula: "θ ← θ − η · ∇L_B(θ)",
+        level: "已经尝试"
+      }),
+      N("adam", "Adam", "优化训练", 15, {
+        desc: "一阶动量 + 二阶动量自适应步长。默认好用，但不是所有任务都最优。",
+        formula: "θ ← θ − η · m_hat / (√v_hat + ε)",
+        ref: "Kingma & Ba 2014",
+        level: "已经尝试"
+      }),
+      N("lr", "学习率", "优化训练", 14, {
+        desc: "最重要的超参数。过大震荡甚至 NaN，过小则停滞；量级通常比精确值更重要。",
+        formula: "η 常用量级：1e-4 ~ 1e-1",
+        level: "已经踩过坑"
+      }),
+      N("init", "参数初始化", "优化训练", 16, {
+        desc: "全零初始化会让所有隐藏单元学到完全相同的特征——对称性无法打破。",
+        formula: "Xavier: Var(W) = 2/(n_in + n_out)\nHe:     Var(W) = 2/n_in",
+        ref: "Glorot & Bengio 2010；He et al. 2015",
+        why: "初始化决定信号与梯度能否在层间稳定传递——是「能不能训起来」的前置条件。",
+        level: "已经尝试（对比过全零 / 高斯 / He）"
+      }),
+      N("vanishing", "梯度消失/爆炸", "优化训练", 15, {
+        desc: "深层连乘使梯度指数衰减或放大。sigmoid 在饱和区导数趋 0，是经典诱因。",
+        formula: "∂L/∂W1 ∝ Π σ'(z_l)  →  连乘即指数",
+        level: "待深入学习"
+      }),
+      N("batchnorm", "归一化", "优化训练", 13, {
+        desc: "按批统计量标准化激活，稳定训练、允许更大学习率。它为何有效仍有争论。",
+        formula: "x_hat = (x − μ_B) / √(σ_B² + ε)",
+        ref: "Ioffe & Szegedy 2015",
+        level: "待深入学习"
+      }),
+      N("overfit", "过拟合", "泛化理论", 15, {
+        desc: "训练误差降、测试误差升：模型开始记住噪声而不是规律。",
+        level: "已经尝试（见过曲线分叉）"
+      }),
+      N("reg", "正则化", "泛化理论", 14, {
+        desc: "L2、Dropout、早停——用不同方式限制「有效容量」。",
+        formula: "L_reg = L + λ‖θ‖²",
+        level: "已经尝试"
+      }),
+      N("biasvar", "偏差—方差分解", "泛化理论", 15, {
+        desc: "经典 U 型曲线：模型太简单欠拟合（高偏差），太复杂过拟合（高方差）。",
+        formula: "E[(y − y_hat)²] = bias² + var + σ²",
+        level: "已初步理解"
+      }),
+      N("double_descent", "双下降", "泛化理论", 17, {
+        desc: "参数超过样本量后，测试误差不升反再降——经典 U 型曲线在过参数化区域失效。",
+        formula: "误差 vs 参数量：U 型 → 峰值 → 再次下降",
+        ref: "Zhang et al. 2017；Belkin et al. 2019",
+        level: "待深入学习"
+      }),
+      N("generalization", "泛化", "泛化理论", 18, {
+        desc: "训练分布上表现好，能否迁移到没见过的新样本？这是「为什么能学习」的最终问题。",
+        why: "所有数学工具最终都服务于这一问：模型学到的是规律，还是巧合？",
+        level: "待深入学习"
+      }),
+      N("dataset", "MNIST", "实践资源", 14, {
+        desc: "6 万训练 / 1 万测试的手写数字，28×28 灰度。线性模型约 92%，两层 MLP 可到 98%。",
+        level: "已使用"
+      }),
+      N("pytorch", "PyTorch", "工具框架", 14, {
+        desc: "动态计算图 + autograd，教学与科研的事实标准。",
+        level: "已使用"
+      }),
+      N("numpy", "NumPy", "工具框架", 13, {
+        desc: "不用框架手写前向与反向——理解梯度最直接的路径。",
+        level: "已经尝试"
+      }),
+      N("c_math", "微积分（甲）I·II", "课程", 12, {
+        desc: "MATH1135G / MATH1136G，各 5.0 学分，大一秋冬 + 春夏。",
+        relation: "前置基础",
+        covers: ["偏导与梯度", "链式法则", "泰勒展开"]
+      }),
+      N("c_linalg", "线性代数（甲）", "课程", 12, {
+        desc: "MATH1232G，3.5 学分，大一秋冬。",
+        relation: "前置基础",
+        covers: ["矩阵乘法", "特征值与 SVD", "向量空间"]
+      }),
+      N("c_prob", "概率论与数理统计", "课程", 12, {
+        desc: "MATH2432F，2.5 学分，大一春夏。",
+        relation: "前置基础",
+        covers: ["随机变量", "期望与方差", "最大似然"]
+      }),
+      N("c_aimath", "人工智能数学方法", "课程", 14, {
+        desc: "AI2004M，4.0 学分，大二春夏。",
+        relation: "核心覆盖",
+        covers: ["矩阵分解与优化视角", "概率图与推断", "数值稳定"]
+      }),
+      N("c_dl", "深度学习基础", "课程", 14, {
+        desc: "AI2003M，4.0 学分，大二秋冬。",
+        relation: "核心覆盖",
+        covers: ["反向传播", "损失函数", "优化器与正则化"]
+      }),
+      N("c_opt", "优化基本理论与方法", "课程", 15, {
+        desc: "AI3002M，4.0 学分，大三秋冬；智能理论方向必修，96 学时含每周 4 学时实验。",
+        relation: "核心覆盖",
+        covers: ["凸优化", "收敛性分析", "随机优化"]
+      }),
+      N("c_advml", "高级机器学习", "课程", 12, {
+        desc: "CS3256M，4.0 学分，大三秋冬；个性修读模块。",
+        relation: "自主拓展",
+        covers: ["学习理论", "泛化边界", "核方法与表示"]
+      })
+    ],
+    links: [
+      L("tensor", "mlp", "组成"), L("activation", "mlp", "组成"),
+      L("universal", "mlp", "解释容量"),
+      L("mlp", "loss", "输出"), L("softmax", "loss", "归一化"),
+      L("mle", "loss", "等价于"), L("loss", "grad", "求导"),
+      L("grad", "chain", "依赖"), L("chain", "backprop", "就是"),
+      L("backprop", "autograd", "自动实现"), L("autograd", "pytorch", "嵌入"),
+      L("numpy", "backprop", "手写载体"), L("pytorch", "numpy", "对照"),
+      L("grad", "sgd", "方向"), L("lr", "sgd", "步长"), L("sgd", "adam", "改进"),
+      L("init", "vanishing", "缓解"), L("vanishing", "backprop", "损害"),
+      L("batchnorm", "vanishing", "缓解"),
+      L("dataset", "mlp", "训练数据"),
+      L("overfit", "reg", "对策"), L("reg", "generalization", "服务于"),
+      L("biasvar", "generalization", "解释"), L("double_descent", "biasvar", "修正"),
+      L("generalization", "double_descent", "反例"),
+      L("c_math", "grad", "前置"), L("c_linalg", "tensor", "前置"),
+      L("c_prob", "mle", "前置"), L("c_aimath", "backprop", "覆盖"),
+      L("c_dl", "loss", "覆盖"), L("c_opt", "sgd", "覆盖"),
+      L("c_advml", "double_descent", "拓展")
+    ]
+  },
+
+  eco: {
+    title: "生态地图 · 谁在推动这套数学",
+    legend: [
+      { color: "#818cf8", label: "会议" },
+      { color: "#6366f1", label: "期刊" },
+      { color: "#f59e0b", label: "学者团队" },
+      { color: "#fb7185", label: "企业" },
+      { color: "#22d3ee", label: "开源项目" },
+      { color: "#c084fc", label: "关键成果" },
+      { color: "#94a3b8", label: "数据集" }
+    ],
+    nodes: [
+      N("neurips", "NeurIPS", "会议", 17, {
+        desc: "CCF-A（依据 CCF 2022 推荐目录）。深度学习规模最大、竞争最激烈的会议。",
+        related: ["双下降", "优化器", "泛化理论"]
+      }),
+      N("icml", "ICML", "会议", 16, {
+        desc: "CCF-A（2022 目录）。机器学习理论文章的主要出口之一。",
+        related: ["学习理论", "优化"]
+      }),
+      N("iclr", "ICLR", "会议", 16, {
+        desc: "未列入 CCF 2022 推荐目录 A 类，但与 NeurIPS / ICML 并称深度学习三大顶会——正好说明「级别」不等于「质量」。",
+        note: "按事实标注：作业要求不能仅凭会议级别判断工作质量"
+      }),
+      N("colt", "COLT", "会议", 13, {
+        desc: "学习理论专门会议。CCF 目录中的归类待核实。",
+        note: "待核实：归类依据需查最新目录版本"
+      }),
+      N("jmlr", "JMLR", "期刊", 13, {
+        desc: "CCF-A 期刊。理论工作在此通常有更完整的证明与讨论。"
+      }),
+      N("hinton", "Hinton（多伦多）", "学者团队", 16, {
+        desc: "与 Rumelhart、Williams 一起系统化推广反向传播；Dropout；2018 图灵奖。",
+        contribution: "反向传播推广、Dropout"
+      }),
+      N("lecun", "LeCun（NYU / Meta）", "学者团队", 16, {
+        desc: "卷积网络与 LeNet；MNIST 数据集的提出者；2018 图灵奖。",
+        contribution: "CNN、MNIST、LeNet"
+      }),
+      N("bengio", "Bengio（MILA）", "学者团队", 14, {
+        desc: "表示学习与注意力机制；2018 图灵奖。",
+        contribution: "表示学习、注意力"
+      }),
+      N("hekaiming", "何恺明", "学者团队", 15, {
+        desc: "ResNet 与 He 初始化。把「深层网络训不动」从理论困境变成工程可解问题。",
+        contribution: "ResNet、He 初始化"
+      }),
+      N("belkin", "Belkin", "学者团队", 14, {
+        desc: "双下降现象的提出者之一，直接挑战经典偏差—方差叙事。",
+        contribution: "双下降"
+      }),
+      N("boyd", "Boyd（Stanford）", "学者团队", 12, {
+        desc: "凸优化教材作者，优化入门的公共基础设施。",
+        contribution: "凸优化教材与课程"
+      }),
+      N("meta_team", "Meta", "企业", 14, {
+        desc: "PyTorch 的主要维护方；同时是 LeCun 所在机构。",
+        related: ["PyTorch", "卷积网络"]
+      }),
+      N("google_team", "Google", "企业", 14, {
+        desc: "TensorFlow / JAX；XLA 编译器把自动微分推进到编译层。",
+        related: ["JAX", "BatchNorm", "Adam"]
+      }),
+      N("pytorch_proj", "PyTorch", "开源项目", 15, {
+        desc: "动态图 + autograd；本组手搓任务完成后用来对照的框架。",
+        related: ["自动微分", "反向传播"]
+      }),
+      N("jax_proj", "JAX", "开源项目", 13, {
+        desc: "函数式 + JIT 编译，自动微分做在编译器层，适合大规模并行与研究原型。"
+      }),
+      N("bp_paper", "反向传播（1986）", "关键成果", 15, {
+        desc: "Rumelhart、Hinton 与 Williams：把链式法则系统地用于多层网络，深度学习的地基。",
+        ref: "Nature, 1986"
+      }),
+      N("resnet_paper", "ResNet（2015）", "关键成果", 14, {
+        desc: "残差连接让极深网络可训练；同时提出 He 初始化。",
+        ref: "He et al., CVPR 2016"
+      }),
+      N("adam_paper", "Adam（2014）", "关键成果", 13, {
+        desc: "自适应矩估计优化器，工程默认选项之一。",
+        ref: "Kingma & Ba, ICLR 2015"
+      }),
+      N("dd_paper", "双下降（2019）", "关键成果", 15, {
+        desc: "Belkin 等发现过参数化区域误差二次下降；Zhang 等更早证明网络能记住随机标签。",
+        ref: "PNAS 2019；ICLR 2017"
+      }),
+      N("mnist_proj", "MNIST", "数据集", 13, {
+        desc: "1998 年由 LeCun 整理发布，至今仍是教学基准。",
+        ref: "LeCun et al., 1998"
+      })
+    ],
+    links: [
+      L("hinton", "bp_paper", "发表"),
+      L("lecun", "mnist_proj", "整理发布"),
+      L("lecun", "meta_team", "任职"),
+      L("hinton", "resnet_paper", "指导"),
+      L("hekaiming", "resnet_paper", "提出"),
+      L("belkin", "dd_paper", "提出"),
+      L("adam_paper", "google_team", "作者所属"),
+      L("neurips", "dd_paper", "发表"),
+      L("icml", "adam_paper", "发表"),
+      L("pytorch_proj", "meta_team", "由…维护"),
+      L("jax_proj", "google_team", "由…开发"),
+      L("pytorch_proj", "bp_paper", "实现"),
+      L("resnet_paper", "bp_paper", "改进"),
+      L("boyd", "colt", "参与"),
+      L("jmlr", "belkin", "发表"),
+      L("meta_team", "google_team", "竞争")
+    ]
+  },
+
+  cog: {
+    title: "认知地图 · 怎么判断「它真的学会了」",
+    legend: [
+      { color: "#34d399", label: "认识方法" },
+      { color: "#38bdf8", label: "分析方法" },
+      { color: "#f59e0b", label: "分析案例" },
+      { color: "#a78bfa", label: "成长习惯" },
+      { color: "#f472b6", label: "认识修正" }
+    ],
+    nodes: [
+      N("sys_view", "系统观", "认识方法", 18, {
+        desc: "训练是一个耦合系统：数据分布、模型容量、优化器、正则化互相制约，单独调一个量常常无效。",
+        example: "把学习率调小不一定更稳——可能只是卡在鞍点附近。"
+      }),
+      N("dev_view", "发展观", "认识方法", 18, {
+        desc: "每个方法都是对上一阶段具体失败的回应；看懂「它解决了什么问题」，比记住定义有用。",
+        example: "sigmoid → ReLU：缓解梯度消失；ReLU → 残差：解决网络退化。"
+      }),
+      N("val_view", "价值观", "认识方法", 16, {
+        desc: "「能学习」不等于「学对了」。准确率高可能是学到了捷径。",
+        example: "MNIST 上抹掉边角像素后准确率骤降——说明模型依赖了无关的分布特征。"
+      }),
+      N("m_sys", "系统拆解", "分析方法", 15, {
+        desc: "把失败定位到具体环节：数据、初始化、前向、损失、反向、优化器、正则化。"
+      }),
+      N("m_evo", "演进分析", "分析方法", 15, {
+        desc: "追问：新方法解决了什么旧问题，又引入了什么新限制。"
+      }),
+      N("m_bound", "反例与边界检查", "分析方法", 15, {
+        desc: "这个结论在什么条件下成立？什么证据能推翻它？"
+      }),
+      N("case_div", "案例：准确率卡在 10%", "分析案例", 17, {
+        desc: "手搓网络训练三轮，准确率始终等于随机猜测（10 类）。",
+        steps: [
+          "数据层：打印一批图像与标签，标签未错位",
+          "初始化：发现权重全零 → 所有隐藏单元梯度相同，对称性未打破",
+          "学习率：1e-1 时 loss 震荡，降到 1e-3 后正常下降",
+          "损失层：softmax 未减最大值出现 inf → 修正为数值稳定写法"
+        ],
+        conclusion: "主因是初始化取全零；次因是 softmax 数值溢出。",
+        remain: "如果换成现代框架的默认初始化，这两个坑会被自动规避——那我们为什么还要手写一遍？"
+      }),
+      N("case_relu", "案例：ReLU 取代 Sigmoid", "分析案例", 16, {
+        desc: "一次典型的演进分析。",
+        old: "sigmoid：输出被压在 (0,1)，饱和区导数趋 0 → 深层连乘后梯度消失。",
+        new: "ReLU：正区间导数恒为 1 → 缓解消失；但负区间导数为 0，出现 dead ReLU。",
+        conclusion: "不是「更好」，而是「换了一种失败方式」——从梯度消失换成神经元死亡。",
+        remain: "GELU / SiLU 是否只是更平滑的折中？"
+      }),
+      N("case_univ", "案例：万能逼近的边界", "分析案例", 16, {
+        desc: "用反例检查一个被广泛误读的定理。",
+        conclusion: "定理只说明「存在某个网络」，不说梯度下降能找到它，也不说需要多少参数与数据。",
+        remain: "什么样的函数类需要指数级宽度？这与深度分离问题有关，尚未读透。"
+      }),
+      N("habit_evidence", "思维：区分证据与猜测", "成长习惯", 14, {
+        desc: "「我觉得是学习率问题」是猜测；「loss 前 100 步震荡且梯度范数大于 10」是证据。",
+        action: "每次下结论前，先写下能支持或推翻它的观测指标。"
+      }),
+      N("habit_gap", "学习：从失败反查缺口", "成长习惯", 14, {
+        desc: "遇到梯度消失，就回去补链式法则与激活函数导数，而不是换一个能跑的模板。",
+        action: "把每次异常对应到一门课的具体章节。"
+      }),
+      N("habit_exp", "实践：最小可复现实验", "成长习惯", 14, {
+        desc: "固定随机种子、固定数据划分，一次只改一个变量。",
+        action: "记录：改动 → 预期 → 实际曲线 → 结论。"
+      }),
+      N("habit_record", "管理：留痕", "成长习惯", 12, {
+        desc: "保留超参数、loss 曲线、代码版本；否则两周后无法复现自己的结论。",
+        action: "每次实验一行记录，附曲线截图。"
+      }),
+      N("habit_update", "认识更新习惯", "成长习惯", 13, {
+        desc: "定期比较「原有预期」与「实际结果」，判断该补知识、改方法还是修假设。",
+        action: "每周问一次：这周有什么结果推翻了我原来的想法？"
+      }),
+      N("correction", "认识修正：过拟合是唯一敌人？", "认识修正", 20, {
+        desc: "本组最重要的一次判断变化。",
+        before: "模型越大越容易过拟合，测试误差随容量单调上升；控制容量是唯一要务。",
+        trigger: "读 Zhang et al. 2017（能记住随机标签却仍泛化）与 Belkin et al. 2019（双下降）；本组把隐藏层从 16 加到 512，测试误差先升后降。",
+        after: "泛化由归纳偏置、优化轨迹、数据分布共同决定；经典偏差—方差只在参数不足区成立，过参数化区存在双下降。",
+        remain: "双下降的机制仍未定论；SGD 的隐式正则究竟发生在哪一步，我们没有能力验证。"
+      })
+    ],
+    links: [
+      L("sys_view", "m_sys", "对应方法"),
+      L("dev_view", "m_evo", "对应方法"),
+      L("val_view", "m_bound", "对应方法"),
+      L("m_sys", "case_div", "实例"),
+      L("m_evo", "case_relu", "实例"),
+      L("m_bound", "case_univ", "实例"),
+      L("habit_evidence", "m_bound", "支撑"),
+      L("habit_gap", "dev_view", "支撑"),
+      L("habit_exp", "case_div", "支撑"),
+      L("habit_update", "correction", "驱动"),
+      L("correction", "case_relu", "相关"),
+      L("habit_record", "habit_exp", "配套")
+    ]
+  }
+};
+
+const CROSS = {
+  loss: { eco: ["bp_paper"], cog: ["case_div"] },
+  backprop: { eco: ["bp_paper", "hinton", "pytorch_proj"], cog: ["case_relu"] },
+  init: { eco: ["hekaiming", "resnet_paper"], cog: ["case_div"] },
+  double_descent: { eco: ["belkin", "dd_paper", "neurips"], cog: ["correction"] },
+  generalization: { eco: ["dd_paper", "belkin"], cog: ["correction", "val_view"] },
+  adam: { eco: ["adam_paper", "google_team"], cog: [] },
+  dataset: { eco: ["mnist_proj", "lecun"], cog: [] },
+  universal: { eco: [], cog: ["case_univ"] },
+  c_opt: { eco: ["boyd", "colt"], cog: [] }
+};
+
+/* ============ 渲染引擎（原生 SVG，零外部依赖） ============ */
+const NS = "http://www.w3.org/2000/svg";
+const TYPE_COLORS = {
+  "数学基础": "#38bdf8", "模型结构": "#a78bfa", "优化训练": "#fb923c", "泛化理论": "#34d399",
+  "工具框架": "#f472b6", "课程": "#fbbf24", "实践资源": "#94a3b8",
+  "会议": "#818cf8", "期刊": "#6366f1", "学者团队": "#f59e0b", "企业": "#fb7185",
+  "开源项目": "#22d3ee", "关键成果": "#c084fc", "数据集": "#94a3b8",
+  "认识方法": "#34d399", "分析方法": "#38bdf8", "分析案例": "#f59e0b",
+  "成长习惯": "#a78bfa", "认识修正": "#f472b6"
+};
+
+let currentMap = "domain";
+const ST = {
+  nodes: [], pairs: [], W: 1100, H: 750, scale: 1, tx: 0, ty: 0,
+  svg: null, vp: null, linkEls: [], labelEls: [], nodeEls: {}, dragNode: null, selected: null
+};
+
+function computeLayout(nodes, links, W, H) {
+  const byId = {}, adj = {}, deg = {};
+  nodes.forEach(n => { byId[n.id] = n; adj[n.id] = []; deg[n.id] = 0; });
+  links.forEach(l => {
+    const s = typeof l.source === "object" ? l.source.id : l.source;
+    const t = typeof l.target === "object" ? l.target.id : l.target;
+    if (byId[s] && byId[t] && s !== t) { adj[s].push(t); adj[t].push(s); deg[s]++; deg[t]++; }
+  });
+
+  let root = nodes[0];
+  nodes.forEach(n => { if (deg[n.id] > deg[root.id]) root = n; });
+
+  const layer = {}; layer[root.id] = 0;
+  const q = [root.id];
+  while (q.length) {
+    const cur = q.shift();
+    adj[cur].forEach(nb => {
+      if (layer[nb] === undefined) { layer[nb] = layer[cur] + 1; q.push(nb); }
+    });
+  }
+  nodes.forEach(n => { if (layer[n.id] === undefined) layer[n.id] = 1; });
+
+  const maxLayer = Math.max.apply(null, nodes.map(n => layer[n.id]));
+  const cx = W / 2, cy = H / 2;
+  const maxR = Math.max(160, Math.min(W, H) / 2 - 90);
+
+  const byLayer = {};
+  nodes.forEach(n => { (byLayer[layer[n.id]] = byLayer[layer[n.id]] || []).push(n); });
+  Object.keys(byLayer).forEach(k => {
+    const arr = byLayer[k], lv = Number(k);
+    const R = maxLayer === 0 ? 0 : maxR * lv / maxLayer;
+    arr.sort((a, b) => (a.id < b.id ? -1 : 1));
+    arr.forEach((n, i) => {
+      const ang = (i / arr.length) * Math.PI * 2 + lv * 0.62 - Math.PI / 2;
+      n.x = cx + Math.cos(ang) * R;
+      n.y = cy + Math.sin(ang) * R;
+    });
+  });
+
+  const labelW = n => Math.min(170, n.label.length * 9 + 10);
+  for (let it = 0; it < 320; it++) {
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const p = nodes[i], s = nodes[j];
+        let dx = s.x - p.x, dy = s.y - p.y;
+        let d = Math.sqrt(dx * dx + dy * dy);
+        if (d < 0.5) { dx = 0.5 + i * 0.013; dy = 0.5; d = Math.sqrt(dx * dx + dy * dy); }
+        const minD = Math.max(p.r + s.r + 34, (labelW(p) + labelW(s)) / 2 + 12);
+        if (d < minD) {
+          const push = (minD - d) / d * 0.5;
+          p.x -= dx * push; p.y -= dy * push;
+          s.x += dx * push; s.y += dy * push;
+        }
+      }
+    }
+    nodes.forEach(n => {
+      n.x += (cx - n.x) * 0.005;
+      n.y += (cy - n.y) * 0.005;
+      const m = n.r + 22;
+      n.x = Math.max(m, Math.min(W - m, n.x));
+      n.y = Math.max(m + 6, Math.min(H - m, n.y));
+    });
+  }
+}
+
+function applyTransform() {
+  if (ST.vp) ST.vp.setAttribute("transform", "translate(" + ST.tx + "," + ST.ty + ") scale(" + ST.scale + ")");
+}
+
+function toGraphPoint(e) {
+  const pt = ST.svg.createSVGPoint();
+  pt.x = e.clientX; pt.y = e.clientY;
+  const m = ST.vp.getScreenCTM();
+  return m ? pt.matrixTransform(m.inverse()) : { x: e.clientX, y: e.clientY };
+}
+
+function draw() {
+  ST.pairs.forEach((p, i) => {
+    const ln = ST.linkEls[i], lb = ST.labelEls[i];
+    if (!ln || !p.s || !p.t) return;
+    ln.setAttribute("x1", p.s.x); ln.setAttribute("y1", p.s.y);
+    ln.setAttribute("x2", p.t.x); ln.setAttribute("y2", p.t.y);
+    if (lb) {
+      lb.setAttribute("x", (p.s.x + p.t.x) / 2);
+      lb.setAttribute("y", (p.s.y + p.t.y) / 2 - 5);
+    }
+  });
+  ST.nodes.forEach(n => {
+    const g = ST.nodeEls[n.id];
+    if (g) g.setAttribute("transform", "translate(" + n.x + "," + n.y + ")");
+  });
+}
+
+function highlight(id) {
+  ST.nodes.forEach(n => {
+    const g = ST.nodeEls[n.id];
+    if (g) g.setAttribute("class", "node" + (n.id === id ? " sel" : ""));
+  });
+  ST.pairs.forEach((p, i) => {
+    const on = p.s && p.t && (p.s.id === id || p.t.id === id);
+    if (ST.linkEls[i]) ST.linkEls[i].setAttribute("class", "link-line" + (on ? " hl" : ""));
+  });
+}
+
+function init() {
+  ST.svg = document.getElementById("graphSvg");
+  ST.vp = document.createElementNS(NS, "g");
+  ST.svg.appendChild(ST.vp);
+
+  ST.svg.addEventListener("wheel", e => {
+    e.preventDefault();
+    const p = toGraphPoint(e);
+    const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const ns = Math.max(0.35, Math.min(3.4, ST.scale * k));
+    const f = ns / ST.scale;
+    ST.tx = p.x - (p.x - ST.tx) * f;
+    ST.ty = p.y - (p.y - ST.ty) * f;
+    ST.scale = ns;
+    applyTransform();
+  }, { passive: false });
+
+  let panning = false, px = 0, py = 0, ptx = 0, pty = 0;
+  ST.svg.addEventListener("pointerdown", e => {
+    if (e.target.closest && e.target.closest("g.node")) return;
+    panning = true; px = e.clientX; py = e.clientY; ptx = ST.tx; pty = ST.ty;
+    if (ST.svg.setPointerCapture) ST.svg.setPointerCapture(e.pointerId);
+  });
+  ST.svg.addEventListener("pointermove", e => {
+    if (!panning) return;
+    ST.tx = ptx + (e.clientX - px);
+    ST.ty = pty + (e.clientY - py);
+    applyTransform();
+  });
+  ST.svg.addEventListener("pointerup", () => { panning = false; });
+  ST.svg.addEventListener("pointercancel", () => { panning = false; });
+
+  window.addEventListener("resize", () => {
+    clearTimeout(window.__rz);
+    window.__rz = setTimeout(() => renderMap(currentMap), 200);
+  });
+
+  renderMap("domain");
+}
+
+function renderMap(mapId) {
+  currentMap = mapId;
+  const data = DATA[mapId];
+  const area = document.getElementById("graphArea");
+  let vw = area.clientWidth, vh = area.clientHeight;
+  if (!vw || vw < 240) vw = (window.innerWidth || 1200) - 420;
+  if (!vh || vh < 240) vh = (window.innerHeight || 800) - 260;
+
+  const dense = data.nodes.length > 26;
+  const W = Math.round(vw * (dense ? 1.3 : 1));
+  const H = Math.round(vh * (dense ? 1.3 : 1));
+  ST.W = W; ST.H = H;
+
+  document.getElementById("legend").innerHTML =
+    '<div class="t">' + data.title + "</div>" +
+    data.legend.map(l => '<div class="lg"><i style="background:' + l.color + ";color:" + l.color + '"></i>' + l.label + "</div>").join("");
+
+  document.getElementById("statN").textContent = data.nodes.length;
+  document.getElementById("statL").textContent = data.links.length;
+
+  const pipe = document.getElementById("pipeline");
+  if (data.pipeline) {
+    pipe.style.display = "flex";
+    pipe.innerHTML = '<span class="lab">主线</span>' + data.pipeline.map((s, i) =>
+      '<span class="step" onclick="jumpTo(\'domain\',\'' + s.id + '\')">' + s.label + "</span>" +
+      (i < data.pipeline.length - 1 ? '<span class="arrow">→</span>' : "")
+    ).join("");
+  } else {
+    pipe.style.display = "none";
+    pipe.innerHTML = "";
+  }
+
+  while (ST.vp.firstChild) ST.vp.removeChild(ST.vp.firstChild);
+  ST.linkEls = []; ST.labelEls = []; ST.nodeEls = {}; ST.selected = null;
+
+  ST.svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  ST.scale = 1; ST.tx = 0; ST.ty = 0;
+  applyTransform();
+
+  computeLayout(data.nodes, data.links, W, H);
+  ST.nodes = data.nodes;
+
+  const byId = {};
+  data.nodes.forEach(n => { byId[n.id] = n; });
+  ST.pairs = data.links
+    .filter(l => {
+      const s = typeof l.source === "object" ? l.source.id : l.source;
+      const t = typeof l.target === "object" ? l.target.id : l.target;
+      return s !== t && byId[s] && byId[t];
+    })
+    .map(l => ({
+      s: byId[typeof l.source === "object" ? l.source.id : l.source],
+      t: byId[typeof l.target === "object" ? l.target.id : l.target],
+      label: l.label || ""
+    }));
+
+  const gLinks = document.createElementNS(NS, "g");
+  const gLabels = document.createElementNS(NS, "g");
+  const gNodes = document.createElementNS(NS, "g");
+  ST.vp.appendChild(gLinks); ST.vp.appendChild(gLabels); ST.vp.appendChild(gNodes);
+
+  ST.pairs.forEach(p => {
+    const ln = document.createElementNS(NS, "line");
+    ln.setAttribute("class", "link-line");
+    gLinks.appendChild(ln);
+    ST.linkEls.push(ln);
+
+    const lb = document.createElementNS(NS, "text");
+    lb.setAttribute("class", "link-label");
+    lb.textContent = p.label;
+    gLabels.appendChild(lb);
+    ST.labelEls.push(lb);
+  });
+
+  data.nodes.forEach(n => {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "node");
+    g.setAttribute("data-id", n.id);
+    g.style.cursor = "pointer";
+
+    const hit = document.createElementNS(NS, "circle");
+    hit.setAttribute("r", n.r + 9);
+    hit.setAttribute("fill", "transparent");
+    g.appendChild(hit);
+
+    const dot = document.createElementNS(NS, "circle");
+    dot.setAttribute("class", "dot");
+    dot.setAttribute("r", n.r);
+    dot.setAttribute("fill", TYPE_COLORS[n.type] || "#94a3b8");
+    dot.setAttribute("fill-opacity", "0.20");
+    dot.setAttribute("stroke", TYPE_COLORS[n.type] || "#94a3b8");
+    dot.setAttribute("stroke-width", "1.8");
+    g.appendChild(dot);
+
+    const tx = document.createElementNS(NS, "text");
+    tx.setAttribute("class", "node-label");
+    tx.setAttribute("dy", n.r + 14);
+    tx.textContent = n.label;
+    g.appendChild(tx);
+
+    gNodes.appendChild(g);
+    ST.nodeEls[n.id] = g;
+
+    let sx = 0, sy = 0, ox = 0, oy = 0, moved = false;
+    g.addEventListener("pointerdown", e => {
+      e.stopPropagation();
+      const p = toGraphPoint(e);
+      sx = p.x; sy = p.y; ox = n.x; oy = n.y; moved = false;
+      ST.dragNode = n;
+      if (g.setPointerCapture) g.setPointerCapture(e.pointerId);
+    });
+    g.addEventListener("pointermove", e => {
+      if (ST.dragNode !== n) return;
+      const p = toGraphPoint(e);
+      if (Math.abs(p.x - sx) + Math.abs(p.y - sy) > 3) moved = true;
+      n.x = ox + (p.x - sx); n.y = oy + (p.y - sy);
+      draw();
+    });
+    g.addEventListener("pointerup", () => {
+      if (ST.dragNode === n) ST.dragNode = null;
+      if (!moved) selectNode(mapId, n);
+    });
+  });
+
+  draw();
+  highlight(null);
+
+  document.getElementById("detailContent").innerHTML =
+    "<h2>点一个节点开始</h2>" +
+    '<p class="hint">当前：' + data.title + "。点击节点查看说明、公式、课程依据与跨图关联；可拖动节点、滚轮缩放、空白处拖动平移。</p>" +
+    '<div class="sec"><h3>怎么看这张图</h3><p>中心是连接最多的概念，外圈逐层展开；颜色代表类别（数学基础 / 模型结构 / 优化训练 / 泛化理论 / 工具 / 课程）。顺着一条链路看，就是「为什么能学习」的一环。</p></div>';
+}
+
+function switchMap(mapId) {
+  document.querySelectorAll(".tab").forEach(t => {
+    t.className = "tab";
+    if (t.dataset.map === mapId) {
+      t.classList.add(mapId === "domain" ? "on-domain" : mapId === "eco" ? "on-eco" : "on-cog");
+    }
+  });
+  renderMap(mapId);
+}
+
+function selectNode(mapId, n) {
+  ST.selected = n.id;
+  highlight(n.id);
+  showDetail(mapId, n);
+  const panel = document.getElementById("detailPanel");
+  if (panel && window.innerWidth <= 860) panel.classList.add("open");
+}
+
+function jumpTo(mapId, nodeId) {
+  switchMap(mapId);
+  const d = DATA[mapId].nodes.find(n => n.id === nodeId);
+  if (!d) return;
+  if (d.x !== undefined) {
+    ST.tx = ST.W / 2 - d.x * ST.scale;
+    ST.ty = ST.H / 2 - d.y * ST.scale;
+    applyTransform();
+  }
+  selectNode(mapId, d);
+  const g = ST.nodeEls[nodeId];
+  if (g) { g.style.filter = "brightness(1.8)"; setTimeout(() => { g.style.filter = ""; }, 900); }
+}
+
+function zoomBy(k) {
+  const p = { x: ST.W / 2, y: ST.H / 2 };
+  const ns = Math.max(0.35, Math.min(3.4, ST.scale * k));
+  const f = ns / ST.scale;
+  ST.tx = p.x - (p.x - ST.tx) * f;
+  ST.ty = p.y - (p.y - ST.ty) * f;
+  ST.scale = ns;
+  applyTransform();
+}
+function zoomIn() { zoomBy(1.25); }
+function zoomOut() { zoomBy(1 / 1.25); }
+function resetZoom() { ST.scale = 1; ST.tx = 0; ST.ty = 0; applyTransform(); }
+
+function showDetail(mapId, d) {
+  const det = d.detail || {};
+  const color = TYPE_COLORS[d.type] || "#94a3b8";
+  let h = "<h2>" + d.label + "</h2>";
+  h += '<span class="tag" style="color:' + color + ";border-color:" + color + ";background:" + color + '1a">' + d.type + "</span>";
+  if (det.level) h += '<span class="tag" style="color:#94a3b8;border-color:#2b415e">' + det.level + "</span>";
+
+  if (det.desc) h += '<div class="sec"><h3>是什么</h3><p>' + det.desc + "</p></div>";
+  if (det.why) h += '<div class="sec"><h3>为什么重要</h3><p>' + det.why + "</p></div>";
+  if (det.formula) h += '<div class="sec"><h3>数学形式</h3><div class="formula">' + det.formula + "</div></div>";
+  if (det.old) h += '<div class="sec"><h3>上一阶段的解法</h3><p>' + det.old + "</p></div>";
+  if (det.new) h += '<div class="sec"><h3>新方法的解法</h3><p>' + det.new + "</p></div>";
+  if (det.steps) h += '<div class="sec"><h3>排查过程</h3><ol>' + det.steps.map(s => "<li>" + s + "</li>").join("") + "</ol></div>";
+  if (det.conclusion) h += '<div class="sec"><h3>当前判断</h3><p>' + det.conclusion + "</p></div>";
+  if (det.remain) h += '<div class="sec"><h3>还不确定</h3><p>' + det.remain + "</p></div>";
+  if (det.before) h += '<div class="sec"><h3>原来以为</h3><p>' + det.before + "</p></div>";
+  if (det.trigger) h += '<div class="sec"><h3>什么改变了它</h3><p>' + det.trigger + "</p></div>";
+  if (det.after) h += '<div class="sec"><h3>现在怎么理解</h3><p>' + det.after + "</p></div>";
+  if (det.action) h += '<div class="sec"><h3>可以怎么做</h3><p>' + det.action + "</p></div>";
+  if (det.example) h += '<div class="sec"><h3>例子</h3><p>' + det.example + "</p></div>";
+  if (det.relation) h += '<div class="sec"><h3>与培养方案的关系</h3><p>' + det.relation + "</p></div>";
+  if (det.covers) h += '<div class="sec"><h3>覆盖内容</h3><ul>' + det.covers.map(c => "<li>" + c + "</li>").join("") + "</ul></div>";
+  if (det.course) h += '<div class="sec"><h3>对应课程</h3><p>' + det.course + "</p></div>";
+  if (det.related) h += '<div class="sec"><h3>相关方向</h3><p>' + det.related.join(" · ") + "</p></div>";
+  if (det.contribution) h += '<div class="sec"><h3>主要贡献</h3><p>' + det.contribution + "</p></div>";
+  if (det.ref) h += '<div class="sec"><h3>来源</h3><p>' + det.ref + "</p></div>";
+  if (det.note) h += '<div class="sec"><h3>标注</h3><p style="color:#fbbf24">' + det.note + "</p></div>";
+
+  const cl = CROSS[d.id];
+  if (cl && ((cl.eco && cl.eco.length) || (cl.cog && cl.cog.length))) {
+    h += '<div class="sec"><h3>跨地图关联</h3>';
+    (cl.eco || []).forEach(id => {
+      const n = DATA.eco.nodes.find(x => x.id === id);
+      if (n) h += '<span class="cross" onclick="jumpTo(\'eco\',\'' + id + '\')">生态 · ' + n.label + "</span>";
+    });
+    (cl.cog || []).forEach(id => {
+      const n = DATA.cog.nodes.find(x => x.id === id);
+      if (n) h += '<span class="cross" onclick="jumpTo(\'cog\',\'' + id + '\')">认知 · ' + n.label + "</span>";
+    });
+    h += "</div>";
+  }
+
+  document.getElementById("detailContent").innerHTML = h;
+}
+
+/* 检索：离线可用；有服务端时叠加解释 */
+let LLM_ENABLED = false;
+
+async function aiQuery() {
+  const q = document.getElementById("aiInput").value.trim();
+  if (!q) return;
+  const box = document.getElementById("aiResult");
+  box.style.display = "block";
+
+  const kws = q.toLowerCase().split(/[\s,，。？?、]+/).filter(Boolean);
+  const hits = [];
+  ["domain", "eco", "cog"].forEach(mid => {
+    DATA[mid].nodes.forEach(n => {
+      const d = n.detail || {};
+      const text = (n.label + " " + n.type + " " + (d.desc || "") + " " + (d.why || "") +
+        " " + (d.formula || "") + " " + (d.related ? d.related.join(" ") : "")).toLowerCase();
+      let score = 0;
+      kws.forEach(k => { if (text.indexOf(k) >= 0) score += k.length; });
+      if (n.label.toLowerCase().indexOf(q.toLowerCase()) >= 0) score += 25;
+      if (score > 0) hits.push({ map: mid, node: n, score: score });
+    });
+  });
+  hits.sort((a, b) => b.score - a.score);
+
+  const mapName = m => (m === "domain" ? "领域" : m === "eco" ? "生态" : "认知");
+  let h = "<h4>地图内检索结果</h4>";
+  if (!hits.length) {
+    h += '<p class="muted">没有直接命中。可以换关键词，例如：反向传播、交叉熵、初始化、双下降、NeurIPS。</p>';
+  } else {
+    h += '<p class="muted">命中 ' + hits.length + " 个节点（点击跳转）</p>";
+    hits.slice(0, 5).forEach(x => {
+      const d = x.node.detail || {};
+      h += '<div class="hit"><a href="javascript:void(0)" onclick="jumpTo(\'' + x.map + "','" + x.node.id + '\')">' +
+        x.node.label + '</a> <span style="font-size:.68rem;color:#5f7796">' + mapName(x.map) + " · " + x.node.type + "</span>" +
+        "<p>" + (d.desc || "") + "</p>" +
+        (d.formula ? '<div class="formula" style="font-size:.72rem;margin-top:.3rem">' + d.formula + "</div>" : "") +
+        "</div>";
+    });
+  }
+  if (LLM_ENABLED) h += '<p id="llmOut" class="muted">正在让模型依据地图内容作答…</p>';
+  else h += '<p class="muted">以上为地图内容检索结果。站点未启用大模型解释时，检索结果仍可直接使用。</p>';
+  box.innerHTML = h;
+
+  if (!LLM_ENABLED) return;
+
+  const nodes = DATA[currentMap].nodes;
+  const ctx = nodes.map(n => n.label + "（" + n.type + "）：" + ((n.detail && n.detail.desc) || "")).join("\n");
+  try {
+    const resp = await fetch("/api/explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: q, context: ctx })
+    });
+    const json = await resp.json();
+    const out = document.getElementById("llmOut");
+    if (json && json.answer && out) {
+      out.innerHTML = "<strong style='color:#a78bfa'>模型解释：</strong>" + String(json.answer).replace(/\n/g, "<br>") +
+        '<div class="warn">AI 生成，请对照地图核实；无依据部分视为待核实</div>';
+    } else if (out) {
+      out.innerHTML = '<span style="color:#f87171">模型服务异常：' + ((json.error && json.error.message) || "未知错误") + "</span>";
+    }
+  } catch (e) {
+    const out = document.getElementById("llmOut");
+    if (out) out.innerHTML = '<span style="color:#f87171">模型服务不可用（检索结果仍然可用）</span>';
+  }
+}
+
+(function probeLLM() {
+  if (typeof fetch !== "function") return;
+  fetch("/api/explain", { method: "GET" })
+    .then(r => r.json())
+    .then(j => { LLM_ENABLED = !!(j && j.ok); })
+    .catch(() => {});
+})();
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}
+</script>
+</body>
+</html>
